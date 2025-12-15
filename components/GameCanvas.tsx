@@ -112,10 +112,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const lastLevelIndexRef = useRef(-1);
   const wasOnGroundRef = useRef(false);
   
+  // Modified speed modifiers for better parallax depth
   const bgLayersRef = useRef<BackgroundLayer[]>([
-    { points: [], color: '', speedModifier: 0.1, offset: 0 }, // Distant Mountains
-    { points: [], color: '', speedModifier: 0.3, offset: 0 }, // Mid Hills
-    { points: [], color: '', speedModifier: 0.6, offset: 0 }, // Near Hills
+    { points: [], color: '', speedModifier: 0.05, offset: 0 }, // Distant Mountains - Moves very slow
+    { points: [], color: '', speedModifier: 0.2, offset: 0 }, // Mid Hills
+    { points: [], color: '', speedModifier: 0.5, offset: 0 }, // Near Hills
   ]);
 
   // Initial Generation
@@ -444,6 +445,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const currentSpeedFrame = (BASE_SPEED + (Math.min(progressRatio, 3.0) * 6)); 
       let currentSpeed = isEndingSequenceRef.current ? currentSpeedFrame * 0.5 : currentSpeedFrame * speedMultiplier; 
       
+      // Update Stars for Parallax
+      if (!isEndingSequenceRef.current) {
+        starsRef.current.forEach(star => {
+            star.x -= currentSpeed * 0.02 * timeScale;
+            if (star.x < 0) star.x += CANVAS_WIDTH;
+        });
+      }
+
       let weatherX = 0;
       let weatherY = 0;
       if (level.weatherType === 'WIND_CORRIDOR') {
@@ -1083,8 +1092,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const scale = 1 + Math.sin(timestamp / 200) * 0.1;
       ctx.scale(scale, scale);
       
-      ctx.fillStyle = POWERUP_COLORS[pup.type];
-      ctx.shadowColor = POWERUP_COLORS[pup.type]; ctx.shadowBlur = 15;
+      const color = POWERUP_COLORS[pup.type];
+
+      // Outer Glow Pulse
+      const pulse = Math.abs(Math.sin(timestamp / 300));
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.2 * pulse;
+      ctx.beginPath(); ctx.arc(pup.width/2, pup.height/2, 30, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      ctx.fillStyle = color;
+      ctx.shadowColor = color; ctx.shadowBlur = 15 + 10 * pulse;
       
       // Orb shape
       ctx.beginPath(); ctx.arc(pup.width/2, pup.height/2, 18, 0, Math.PI*2); ctx.fill();
