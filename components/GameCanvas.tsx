@@ -764,7 +764,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       
       drawBgClouds(ctx);
       
-      // --- World Transform ---
+      // --- World Transform & Shake ---
       ctx.save();
       const dx = (Math.random() - 0.5) * shakeRef.current;
       const dy = (Math.random() - 0.5) * shakeRef.current;
@@ -820,6 +820,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       ctx.fillStyle = rad;
       ctx.globalCompositeOperation = 'source-over'; // Multiply or normal depending on look
       ctx.fillRect(0,0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      // Chromatic Aberration on Impact
+      if (shakeRef.current > 5) {
+          ctx.globalCompositeOperation = 'screen';
+          ctx.fillStyle = "rgba(255, 0, 0, 0.2)";
+          ctx.fillRect(5, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+          ctx.fillStyle = "rgba(0, 255, 255, 0.2)";
+          ctx.fillRect(-5, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+          ctx.globalCompositeOperation = 'source-over';
+      }
 
       if (isLightsOutRef.current) {
          ctx.fillStyle = "rgba(0,0,0,0.5)";
@@ -1280,8 +1290,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   };
 
   return (
-    <div className="relative w-full h-full max-w-[1200px] max-h-[600px] mx-auto border-4 border-slate-800 shadow-2xl rounded-xl overflow-hidden bg-black group">
-      <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-cover" />
+    <div className="relative w-full h-full bg-black overflow-hidden group">
+      <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full" />
       {gameState !== GameState.INTRO && !cinematicMode && !isEndingSequenceRef.current && (
         <>
           <UIOverlay 

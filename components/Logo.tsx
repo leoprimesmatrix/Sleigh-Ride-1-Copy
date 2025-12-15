@@ -20,7 +20,7 @@ const Logo: React.FC<{ className?: string }> = ({ className }) => (
       y="105" 
       textAnchor="middle" 
       fontFamily="'Mountains of Christmas', cursive" 
-      fontSize="90" 
+      fontSize="80" 
       fontWeight="700" 
       fill="url(#logoGrad)" 
       stroke="white" 
@@ -28,7 +28,7 @@ const Logo: React.FC<{ className?: string }> = ({ className }) => (
       filter="url(#glow)"
       style={{ textShadow: '0px 5px 10px rgba(0,0,0,0.5)' }}
     >
-      Sleigh Ride
+      Sleigh Ride 2
     </text>
     
     {/* Decorative Holly/Snow accents */}
