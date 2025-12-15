@@ -166,7 +166,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     snowballs: 0,
     progress: 0,
     timeLeft: TOTAL_GAME_TIME_SECONDS,
-    levelIndex: 0,
+    levelIndex: startLevelIndex, // FIX: Initialize with passed startLevelIndex
     score: 0,
     activeSpeed: 0,
     activeHealing: 0,
@@ -263,8 +263,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     if (!canvas || !ctx) return;
 
     const resetGame = () => {
-      const initialDistance = startLevelIndex > 0 ? VICTORY_DISTANCE * (LEVEL_THRESHOLDS[startLevelIndex] / 100) : 0;
-
+      // FIX: In Story mode, level starts at 0 distance. Discrete levels.
+      const initialDistance = (gameMode === GameMode.STORY) ? 0 : 0; 
+      
       // Reset Player
       playerRef.current = {
         id: 0, x: 150, y: 300, width: 90, height: 40, markedForDeletion: false,
@@ -405,24 +406,28 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       let progressRatio = distanceRef.current / VICTORY_DISTANCE;
       if (gameMode === GameMode.STORY) progressRatio = Math.min(1.02, progressRatio);
 
+      // FIX: Level Index Calculation for Discrete Levels
       let levelIndex = 0;
-      let effectiveProgress = progressRatio * 100;
-      if (gameMode === GameMode.ENDLESS && progressRatio > 1) {
-          effectiveProgress = (progressRatio % 1) * 100;
-      } else if (gameMode === GameMode.STORY) {
-          effectiveProgress = Math.min(100, effectiveProgress);
-      }
-
-      for (let i = LEVELS.length - 1; i >= 0; i--) {
-        if (effectiveProgress >= LEVEL_THRESHOLDS[i]) {
-          levelIndex = i;
-          break;
-        }
+      if (gameMode === GameMode.STORY) {
+          // In Story Mode, we stay in the selected level.
+          levelIndex = startLevelIndex;
+      } else {
+          // Endless mode logic
+          let effectiveProgress = progressRatio * 100;
+          if (progressRatio > 1) {
+              effectiveProgress = (progressRatio % 1) * 100;
+          }
+          for (let i = LEVELS.length - 1; i >= 0; i--) {
+            if (effectiveProgress >= LEVEL_THRESHOLDS[i]) {
+              levelIndex = i;
+              break;
+            }
+          }
       }
       
       // Update max reached level
       const maxReached = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
-      if (levelIndex > maxReached) {
+      if (levelIndex > maxReached && gameMode === GameMode.ENDLESS) {
           localStorage.setItem('sleigh_ride_max_level', levelIndex.toString());
       }
 
@@ -474,6 +479,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
            weatherY = (Math.sin(timestamp / 150) * 0.8);
       }
       
+      // Ending / Level Complete Trigger
       if (gameMode === GameMode.STORY && progressRatio >= 0.90 && !endingMusicTriggeredRef.current) {
           if (wishesCollectedCountRef.current >= 0) { 
              endingMusicTriggeredRef.current = true;
@@ -499,11 +505,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           } else {
               player.vy = 0;
               player.y += (200 - player.y) * 0.05 * timeScale;
-              if (!masterGiftDroppedRef.current && landmarksRef.current.some(l => l.type === 'FINAL_HOUSE' && l.x < logicalWidth/2)) {
-                  masterGiftDroppedRef.current = true;
-                  createParticles(player.x, player.y, ParticleType.GLOW, 50, 'gold');
-                  flashTimerRef.current = 2.0;
-                  setTimeout(() => { joyRideModeRef.current = true; joyRideTimerRef.current = 12.0; }, 500);
+              
+              // Only spawn Master Gift in Final House level (usually last level) or just trigger win directly
+              // If it's the last level, look for landmark
+              // If regular level, just fly off
+              const isLastLevel = levelIndex === LEVELS.length - 1;
+              
+              if (isLastLevel) {
+                 if (!masterGiftDroppedRef.current && landmarksRef.current.some(l => l.type === 'FINAL_HOUSE' && l.x < logicalWidth/2)) {
+                      masterGiftDroppedRef.current = true;
+                      createParticles(player.x, player.y, ParticleType.GLOW, 50, 'gold');
+                      flashTimerRef.current = 2.0;
+                      setTimeout(() => { joyRideModeRef.current = true; joyRideTimerRef.current = 5.0; }, 500);
+                  }
+              } else {
+                  // Standard level completion
+                   if (!masterGiftDroppedRef.current) {
+                      masterGiftDroppedRef.current = true;
+                      setTimeout(() => { joyRideModeRef.current = true; joyRideTimerRef.current = 2.0; }, 500);
+                   }
               }
           }
       } else {

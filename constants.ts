@@ -18,7 +18,7 @@ export const STAMINA_RECOVERY_THRESHOLD = 15;
 export const LOW_STAMINA_PENALTY = 0.6; 
 
 export const INITIAL_STABILITY = 100;
-export const REQUIRED_WISHES = 40; // Reduced proportionally
+export const REQUIRED_WISHES = 10; // Reduced for shorter levels
 
 export const POWERUP_COLORS: Record<PowerupType, string> = {
   [PowerupType.SPEED]: '#ef4444',
@@ -28,7 +28,7 @@ export const POWERUP_COLORS: Record<PowerupType, string> = {
   [PowerupType.LIFE]: '#ec4899',
 };
 
-export const LEVEL_THRESHOLDS = [0, 20, 40, 60, 80]; // Evenly distributed
+export const LEVEL_THRESHOLDS = [0, 20, 40, 60, 80]; // Used for Endless mode scaling
 
 export const LEVELS: LevelConfig[] = [
   {
@@ -104,7 +104,7 @@ export const LEVELS: LevelConfig[] = [
 ];
 
 export const TOTAL_GAME_TIME_SECONDS = 300; 
-export const VICTORY_DISTANCE = 100000; // Significantly reduced for shorter levels
+export const VICTORY_DISTANCE = 25000; // Adjusted for a short, single level (~1 min)
 
 export const WISHES = [
   "I hope things go back to normal.",
