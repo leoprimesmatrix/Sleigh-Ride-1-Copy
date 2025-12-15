@@ -110,9 +110,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const lastLevelIndexRef = useRef(-1);
   
   const bgLayersRef = useRef<BackgroundLayer[]>([
-    { points: [], blocks: [], color: '', speedModifier: 0.05, offset: 0 }, // Far
-    { points: [], blocks: [], color: '', speedModifier: 0.2, offset: 0 }, // Mid
-    { points: [], blocks: [], color: '', speedModifier: 0.5, offset: 0 }, // Near
+    { points: [], blocks: [], color: '', speedModifier: 0.1, offset: 0 }, // Far
+    { points: [], blocks: [], color: '', speedModifier: 0.3, offset: 0 }, // Mid
+    { points: [], blocks: [], color: '', speedModifier: 0.6, offset: 0 }, // Near
   ]);
 
   // Generators
@@ -120,7 +120,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const points = [];
       let y = baseHeight;
       // Generate enough points to cover the logical width plus buffer
-      for (let i = 0; i <= width + 400; i += 50) {
+      for (let i = 0; i <= width + 600; i += 50) {
           y += (Math.random() - 0.5) * roughness;
           y = Math.max(20, Math.min(y, baseHeight + 150)); 
           points.push(y);
@@ -132,9 +132,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const blocks = [];
       for(let i=0; i<count; i++) {
           blocks.push({
-              x: i * 60,
-              w: 40 + Math.random() * 40,
-              h: avgHeight + (Math.random() - 0.5) * 100
+              x: i * 80 + Math.random() * 20,
+              w: 50 + Math.random() * 40,
+              h: avgHeight + (Math.random() - 0.5) * 150
           });
       }
       return blocks;
@@ -420,6 +420,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         }
       }
       
+      // Update max reached level
       const maxReached = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
       if (levelIndex > maxReached) {
           localStorage.setItem('sleigh_ride_max_level', levelIndex.toString());
@@ -758,13 +759,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, logicalWidth, CANVAS_HEIGHT);
       
-      // Aurora Effect for specific levels
-      if (level.terrainType === 'MOUNTAINS' || level.terrainType === 'SPIKES') {
+      // Aurora Effect
+      if (level.terrainType === 'MOUNTAINS' || level.terrainType === 'SPIKES' || level.terrainType === 'HILLS') {
          drawAurora(ctx, timestamp, logicalWidth, level.ambientLight);
+      }
+      
+      // Distant Planet/Moon for added depth
+      if (level.terrainType !== 'CITY') {
+         drawMoon(ctx, logicalWidth);
       }
 
       drawStars(ctx, timestamp);
-      drawMoon(ctx, logicalWidth);
 
       // Draw Layers based on Terrain Type
       if (level.terrainType === 'CITY') {
@@ -945,18 +950,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const time = timestamp * 0.0005;
       const gradient = ctx.createLinearGradient(0, 0, width, 0);
       gradient.addColorStop(0, "rgba(0,0,0,0)");
-      gradient.addColorStop(0.5, ambientColor.replace('0.15', '0.3').replace('0.2', '0.4')); // Use ambient color for theme
+      gradient.addColorStop(0.5, ambientColor.replace('0.15', '0.4').replace('0.2', '0.5')); 
       gradient.addColorStop(1, "rgba(0,0,0,0)");
       
       ctx.fillStyle = gradient;
       ctx.globalCompositeOperation = "screen";
-      ctx.filter = "blur(20px)";
-      ctx.globalAlpha = 0.5;
+      ctx.filter = "blur(30px)";
+      ctx.globalAlpha = 0.6;
       
       ctx.beginPath();
       ctx.moveTo(0, CANVAS_HEIGHT / 2);
       for (let x = 0; x <= width; x += 50) {
-          const y = Math.sin(x * 0.005 + time) * 50 + Math.sin(x * 0.01 - time * 2) * 30 + (CANVAS_HEIGHT / 3);
+          const y = Math.sin(x * 0.005 + time) * 60 + Math.sin(x * 0.01 - time * 2) * 40 + (CANVAS_HEIGHT / 3);
           ctx.lineTo(x, y);
       }
       ctx.lineTo(width, 0);
@@ -979,7 +984,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     bgCloudsRef.current.forEach(c => {
         ctx.fillStyle = `rgba(255,255,255,${c.opacity})`;
         ctx.save(); ctx.translate(c.x, c.y); ctx.scale(c.scale, c.scale);
-        // Complex Cloud Shape
         ctx.beginPath(); 
         ctx.arc(0,0, 40, 0, Math.PI*2); 
         ctx.arc(35, -10, 45, 0, Math.PI*2); 
@@ -1009,7 +1013,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       for (let i = 0; i < layer.points.length - 1; i++) {
           const x = (i * segmentWidth) + layer.offset; 
           const y = baseY - layer.points[i];
-          if (x > width + 100) break; // Optimization
+          if (x > width + 100) break; 
           if (i === 0) ctx.moveTo(x, y); 
           else ctx.lineTo(x, y);
       }
@@ -1018,27 +1022,29 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       ctx.lineTo(0, CANVAS_HEIGHT); 
       ctx.fill();
 
-      // Decoration: Snow Caps or Spikes
+      // Better Snowcaps & Textures
       if (!isForeground) {
-          ctx.fillStyle = "rgba(255,255,255,0.15)";
+          ctx.fillStyle = "rgba(255,255,255,0.2)";
           ctx.beginPath();
           for (let i = 0; i < layer.points.length - 1; i++) {
               const x = (i * segmentWidth) + layer.offset; 
               if (x > width + 100) break;
               const y = baseY - layer.points[i];
               
-              if (type === 'SPIKES' && layer.points[i] > 100) {
-                 ctx.moveTo(x, y);
-                 ctx.lineTo(x + 5, y + 50);
-                 ctx.lineTo(x - 5, y + 50);
-                 ctx.fill();
-              }
-              else if (type === 'MOUNTAINS' && layer.points[i] > 100) { 
-                 // Snowcap
-                 ctx.moveTo(x, y);
-                 ctx.lineTo(x + 15, y + 30);
-                 ctx.bezierCurveTo(x, y + 40, x - 5, y + 35, x - 15, y + 30);
-                 ctx.fill();
+              // Only draw details if height suggests it's a peak
+              if (layer.points[i] > 80) {
+                  if (type === 'SPIKES') {
+                     ctx.moveTo(x, y);
+                     ctx.lineTo(x + 5, y + 80);
+                     ctx.lineTo(x - 5, y + 80);
+                     ctx.fill();
+                  } else {
+                     // Smoother snow cap
+                     ctx.moveTo(x, y);
+                     ctx.lineTo(x + 20, y + 40);
+                     ctx.bezierCurveTo(x + 10, y + 50, x - 10, y + 50, x - 20, y + 40);
+                     ctx.fill();
+                  }
               }
           }
       }
@@ -1056,35 +1062,44 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       ctx.fillStyle = color;
       if (!layer.blocks) return;
 
-      layer.blocks.forEach((block) => {
+      layer.blocks.forEach((block, idx) => {
           const x = block.x + layer.offset;
           if (x > -100 && x < width) {
              const y = baseY - block.h;
-             // Main Building
+             
+             // Building Body
              ctx.fillRect(x, y, block.w, block.h);
              
-             // Antenna / Spire
+             // Top Decoration (Spire or Roof)
              if (block.h > 150) {
-                 ctx.fillRect(x + block.w/2 - 2, y - 20, 4, 20);
-                 if (Math.sin(timestamp / 200 + x) > 0.8) {
+                 ctx.fillRect(x + block.w/2 - 3, y - 25, 6, 25);
+                 // Blinking light
+                 if (!isForeground && Math.sin(timestamp / 300 + idx) > 0.5) {
                     ctx.fillStyle = "red";
-                    ctx.beginPath(); ctx.arc(x + block.w/2, y - 22, 2, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(x + block.w/2, y - 25, 2, 0, Math.PI*2); ctx.fill();
                     ctx.fillStyle = color;
                  }
              }
 
-             // Windows
+             // Windows with better pattern
              if (!isForeground) {
-                 ctx.fillStyle = Math.sin(timestamp/500 + x) > 0 ? "rgba(255, 255, 100, 0.4)" : "rgba(255, 255, 255, 0.1)";
-                 const winSize = 4;
-                 const gap = 8;
-                 for(let wx = x + gap; wx < x + block.w - gap; wx += gap + winSize) {
-                     for(let wy = y + 15; wy < baseY - 10; wy += gap + winSize) {
-                         // Random lights
-                         if ((wx * wy) % 7 !== 0) ctx.fillRect(wx, wy, winSize, winSize * 1.5);
+                 ctx.fillStyle = Math.sin(timestamp/500 + x) > 0 ? "rgba(255, 230, 100, 0.5)" : "rgba(255, 255, 255, 0.1)";
+                 const winW = 4;
+                 const winH = 6;
+                 const gapX = 8;
+                 const gapY = 12;
+                 
+                 // Draw windows only on taller buildings or if close
+                 if (block.h > 80) {
+                     for(let wx = x + 6; wx < x + block.w - 6; wx += gapX) {
+                         for(let wy = y + 20; wy < baseY - 10; wy += gapY) {
+                             if ((wx * wy + idx) % 5 !== 0) { // Randomize ON/OFF
+                                 ctx.fillRect(wx, wy, winW, winH);
+                             }
+                         }
                      }
                  }
-                 ctx.fillStyle = color; // Reset
+                 ctx.fillStyle = color; 
              }
           }
       });
