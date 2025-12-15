@@ -498,9 +498,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               joyRideTimerRef.current -= dt;
               player.y = 250 + Math.sin(timestamp / 400) * 80;
               player.angle = Math.sin(timestamp / 400) * 0.2;
+              
               if (joyRideTimerRef.current <= 0) {
-                   setGameState(GameState.VICTORY);
-                   onWin();
+                   // LEVEL COMPLETE LOGIC
+                   const isLastLevel = levelIndex === LEVELS.length - 1;
+                   if (gameMode === GameMode.STORY) {
+                       if (isLastLevel) {
+                           setGameState(GameState.VICTORY);
+                       } else {
+                           setGameState(GameState.LEVEL_COMPLETE);
+                       }
+                   } else {
+                       // Endless mode logic
+                       setGameState(GameState.VICTORY); 
+                   }
+                   onWin(); // This updates progress
               }
           } else {
               player.vy = 0;

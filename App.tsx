@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import GameCanvas from './components/GameCanvas.tsx';
 import VictorySequence from './components/VictorySequence.tsx';
 import BadEndingSequence from './components/BadEndingSequence.tsx';
+import LevelCompleteScreen from './components/LevelCompleteScreen.tsx';
 import { GameState, PowerupType, GameMode } from './types.ts';
 import { POWERUP_COLORS, LEVELS } from './constants.ts';
 import { Play, RefreshCw, HelpCircle, ArrowLeft, Loader2, FileText, X, Bell, Gift, Lock, Infinity as InfinityIcon, Zap, Map as MapIcon, ChevronRight, ChevronLeft } from 'lucide-react';
@@ -28,6 +29,10 @@ const App: React.FC = () => {
   const [introStage, setIntroStage] = useState(0);
 
   useEffect(() => {
+    // Reset level progress on page load (session based)
+    localStorage.setItem('sleigh_ride_max_level', '0');
+    setMaxLevelReached(0);
+
     const savedVersion = localStorage.getItem('sleigh_ride_version');
     if (savedVersion !== CURRENT_VERSION) {
       setShowUpdateNotification(true);
@@ -35,12 +40,18 @@ const App: React.FC = () => {
     
     const storyComplete = localStorage.getItem('sleigh_ride_story_complete') === 'true';
     const introSeen = localStorage.getItem('sleigh_ride_intro_seen') === 'true';
-    const savedMaxLevel = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
     
     setIsStoryComplete(storyComplete);
     setHasSeenIntro(introSeen);
-    setMaxLevelReached(savedMaxLevel);
-  }, [gameState]); // Re-check when game state changes (e.g. game over)
+  }, []); 
+
+  // Watch for game state changes to update max level from local storage if needed (though we mostly control it via state now)
+  useEffect(() => {
+    const savedMaxLevel = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
+    if (savedMaxLevel > maxLevelReached) {
+        setMaxLevelReached(savedMaxLevel);
+    }
+  }, [gameState]);
   
   useEffect(() => {
     if (gameState === GameState.INTRO) {
@@ -80,15 +91,30 @@ const App: React.FC = () => {
   };
 
   const handleWin = () => {
-      setGameState(GameState.VICTORY);
-      if (gameMode === GameMode.STORY && !isStoryComplete) {
+      // Logic handled inside GameCanvas to set state to VICTORY or LEVEL_COMPLETE
+      // But we need to update the save file
+      const current = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
+      if (selectedLevel >= current && current < LEVELS.length - 1) {
+          const nextLevel = current + 1;
+          localStorage.setItem('sleigh_ride_max_level', nextLevel.toString());
+          setMaxLevelReached(nextLevel);
+      }
+      
+      // If complete game victory
+      if (gameMode === GameMode.STORY && selectedLevel === LEVELS.length - 1) {
+          setGameState(GameState.VICTORY);
           setIsStoryComplete(true);
           localStorage.setItem('sleigh_ride_story_complete', 'true');
       }
-      // Max level updated inside GameCanvas usually, but double check here
-      const current = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
-      if (selectedLevel >= current && current < LEVELS.length - 1) {
-          localStorage.setItem('sleigh_ride_max_level', (current + 1).toString());
+  };
+
+  const handleNextLevel = () => {
+      const nextLevelIndex = selectedLevel + 1;
+      if (nextLevelIndex < LEVELS.length) {
+          handleStartGame(GameMode.STORY, nextLevelIndex);
+      } else {
+          // Fallback if somehow triggered on last level
+          setGameState(GameState.VICTORY);
       }
   };
 
@@ -422,7 +448,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {(gameState === GameState.PLAYING || gameState === GameState.GAME_OVER || gameState === GameState.VICTORY || gameState === GameState.BAD_ENDING || gameState === GameState.INTRO) && (
+      {(gameState === GameState.PLAYING || gameState === GameState.GAME_OVER || gameState === GameState.VICTORY || gameState === GameState.BAD_ENDING || gameState === GameState.INTRO || gameState === GameState.LEVEL_COMPLETE) && (
         <div className="fixed inset-0 z-0">
           <GameCanvas 
             gameState={gameState} 
@@ -476,6 +502,15 @@ const App: React.FC = () => {
                       </button>
                   </div>
               </div>
+          )}
+
+          {gameState === GameState.LEVEL_COMPLETE && (
+              <LevelCompleteScreen 
+                levelIndex={selectedLevel}
+                onNextLevel={handleNextLevel}
+                onMenu={restartGame}
+                score={0} // Score ref not passed up, simplified for now
+              />
           )}
 
           {gameState === GameState.GAME_OVER && (
