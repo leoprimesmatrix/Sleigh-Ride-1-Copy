@@ -3,20 +3,21 @@ import { LevelConfig, PowerupType, DialogueLine } from './types.ts';
 
 export const CANVAS_WIDTH = 1200;
 export const CANVAS_HEIGHT = 600;
-export const GRAVITY = 0.4;
-export const JUMP_STRENGTH = -8;
-export const FLIGHT_LIFT = -0.5;
-export const BASE_SPEED = 6;
+export const GRAVITY = 0.5; // Slightly heavier feeling
+export const JUMP_STRENGTH = -9;
+export const FLIGHT_LIFT = -0.6;
+export const BASE_SPEED = 7;
 
 // Reindeer Physics Constants
 export const MAX_STAMINA = 100;
-export const JUMP_STAMINA_COST = 15;
-export const BOOST_STAMINA_COST = 0.5; // per frame
-export const STAMINA_REGEN = 0.3; // per frame when stable
-export const LOW_STAMINA_PENALTY = 0.6; // Multiplier for jump strength when exhausted
+export const JUMP_STAMINA_COST = 20;
+export const BOOST_STAMINA_COST = 0.8; // Cost per frame for holding up
+export const STAMINA_REGEN = 0.4; // Base regen
+export const STAMINA_RECOVERY_THRESHOLD = 25; // Must reach this % to jump again if exhausted
+export const LOW_STAMINA_PENALTY = 0.4; 
 
 export const INITIAL_STABILITY = 100;
-export const REQUIRED_WISHES = 80; // Kept as "Score" or secondary objective
+export const REQUIRED_WISHES = 80;
 
 export const POWERUP_COLORS: Record<PowerupType, string> = {
   [PowerupType.SPEED]: '#ef4444',
@@ -33,7 +34,7 @@ export const LEVELS: LevelConfig[] = [
     name: "The Buried Road",
     description: "Snowstorms have covered the supply route.",
     missionObjective: "Blast obstacles to clear the path.",
-    backgroundGradient: ['#334155', '#475569'], 
+    backgroundGradient: ['#1e293b', '#334155'], // Darker Slate
     obstacleSpeedMultiplier: 1.0,
     spawnRateMultiplier: 1.2,
     weatherIntensity: 1,
@@ -44,7 +45,7 @@ export const LEVELS: LevelConfig[] = [
     name: "The Dark Metropolis",
     description: "The power grid has failed. Belief is dropping.",
     missionObjective: "Collect stabilizers to re-ignite the city.",
-    backgroundGradient: ['#020617', '#1e1b4b'],
+    backgroundGradient: ['#020617', '#172554'], // Midnight Blue
     obstacleSpeedMultiplier: 1.1,
     spawnRateMultiplier: 1.3,
     weatherIntensity: 0,
@@ -55,7 +56,7 @@ export const LEVELS: LevelConfig[] = [
     name: "Turbulent Skies",
     description: "Atmospheric instability detected.",
     missionObjective: "Maintain altitude. Watch Reindeer stamina.",
-    backgroundGradient: ['#0f172a', '#334155'],
+    backgroundGradient: ['#0f172a', '#475569'],
     obstacleSpeedMultiplier: 1.3,
     spawnRateMultiplier: 0.9,
     weatherIntensity: 3,
@@ -66,7 +67,7 @@ export const LEVELS: LevelConfig[] = [
     name: "The Split Path",
     description: "High winds ahead. Route integrity critical.",
     missionObjective: "Survive the wind corridor.",
-    backgroundGradient: ['#e2e8f0', '#f8fafc'],
+    backgroundGradient: ['#1e1b4b', '#312e81'], // Indigo Storm
     obstacleSpeedMultiplier: 1.5,
     spawnRateMultiplier: 1.4,
     weatherIntensity: 5,
@@ -77,7 +78,7 @@ export const LEVELS: LevelConfig[] = [
     name: "Eye of the Storm",
     description: "The source of the anomaly.",
     missionObjective: "Deliver the final spark.",
-    backgroundGradient: ['#7c2d12', '#f59e0b'],
+    backgroundGradient: ['#450a0a', '#7f1d1d'], // Red warning sky
     obstacleSpeedMultiplier: 1.2,
     spawnRateMultiplier: 1.0,
     weatherIntensity: 8,
