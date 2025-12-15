@@ -126,16 +126,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         let y = baseHeight;
         for (let i = 0; i <= CANVAS_WIDTH + 400; i += steps) {
             y += (Math.random() - 0.5) * roughness;
-            // Clamping
-            y = Math.max(Math.min(y, baseHeight + 100), baseHeight - 200);
+            // Clamping to keep terrain reasonable
+            y = Math.max(20, Math.min(y, baseHeight + 150)); 
             points.push(y);
         }
         return points;
     };
 
-    bgLayersRef.current[0].points = generateJaggedTerrain(200, 150, 40); 
-    bgLayersRef.current[1].points = generateJaggedTerrain(100, 80, 40);  
-    bgLayersRef.current[2].points = generateJaggedTerrain(50, 40, 20);  
+    bgLayersRef.current[0].points = generateJaggedTerrain(250, 100, 40); // High peaks in back
+    bgLayersRef.current[1].points = generateJaggedTerrain(150, 60, 40);  // Mid range
+    bgLayersRef.current[2].points = generateJaggedTerrain(60, 30, 20);   // Low foreground
 
     starsRef.current = [];
     for (let i = 0; i < 150; i++) {
@@ -573,11 +573,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           if (layer.offset <= -50) {
               layer.offset += 50;
               layer.points.shift();
+              
               // Procedural Generation for infinite scrolling
               const prevY = layer.points[layer.points.length - 1];
               let nextY = prevY + (Math.random() - 0.5) * (index === 0 ? 60 : 20);
-              // Clamp
-              nextY = Math.max(-200, Math.min(200, nextY));
+              
+              // Correct Clamping logic for positive height values
+              const maxHeight = index === 0 ? 350 : (index === 1 ? 200 : 100);
+              const minHeight = index === 0 ? 150 : (index === 1 ? 50 : 20);
+              
+              nextY = Math.max(minHeight, Math.min(maxHeight, nextY));
               layer.points.push(nextY);
           }
       });
@@ -728,8 +733,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       drawStars(ctx, timestamp);
       drawMoon(ctx);
 
-      drawMountainLayer(ctx, bgLayersRef.current[0], CANVAS_HEIGHT - 100, "#1e293b", timestamp); // Far
-      drawMountainLayer(ctx, bgLayersRef.current[1], CANVAS_HEIGHT - 50, "#334155", timestamp); // Mid
+      drawMountainLayer(ctx, bgLayersRef.current[0], CANVAS_HEIGHT, "#1e293b", timestamp); // Far - Adjusted BaseY
+      drawMountainLayer(ctx, bgLayersRef.current[1], CANVAS_HEIGHT, "#334155", timestamp); // Mid - Adjusted BaseY
       drawBgClouds(ctx);
       
       // --- World Transform ---
@@ -739,7 +744,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       ctx.translate(dx, dy);
 
       // --- Foreground Mountains ---
-      drawMountainLayer(ctx, bgLayersRef.current[2], CANVAS_HEIGHT, "#475569", timestamp, true);
+      drawMountainLayer(ctx, bgLayersRef.current[2], CANVAS_HEIGHT, "#475569", timestamp, true); // Adjusted BaseY
 
       if (!cinematicMode) {
           landmarksRef.current.forEach(lm => drawLandmark(ctx, lm, timestamp));
@@ -895,7 +900,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       // We iterate through points. layer.points contains height offsets.
       for (let i = 0; i < layer.points.length - 1; i++) {
           const x = (i * segmentWidth) + layer.offset; 
-          const y = baseY + layer.points[i];
+          // CORRECTED: Subtract the height point from the bottom (baseY) to draw upwards
+          const y = baseY - layer.points[i];
           
           if (i === 0) ctx.moveTo(x, y); 
           else ctx.lineTo(x, y);
@@ -912,8 +918,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           ctx.beginPath();
           for (let i = 0; i < layer.points.length - 1; i++) {
               const x = (i * segmentWidth) + layer.offset; 
-              const y = baseY + layer.points[i];
-              if (layer.points[i] < -50) { // Only on peaks
+              const y = baseY - layer.points[i];
+              if (layer.points[i] > 100) { // Only on high peaks
                  ctx.moveTo(x, y);
                  ctx.lineTo(x + 10, y + 20);
                  ctx.lineTo(x - 10, y + 20);
