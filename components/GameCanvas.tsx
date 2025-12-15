@@ -52,9 +52,10 @@ interface GameCanvasProps {
   setGameState: (state: GameState) => void;
   onWin: () => void;
   gameMode: GameMode;
+  startLevelIndex?: number;
 }
 
-const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin, gameMode }) => {
+const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin, gameMode, startLevelIndex = 0 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
   const [debugMenuOpen, setDebugMenuOpen] = useState(false);
@@ -91,6 +92,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const joyRideTimerRef = useRef(0);
   const masterGiftDroppedRef = useRef(false);
   const wasOnGroundRef = useRef(false);
+  const trailTimerRef = useRef(0);
 
   const collectedPowerupsRef = useRef<{ id: number; type: PowerupType }[]>([]);
   const wishesCollectedCountRef = useRef(0);
@@ -284,6 +286,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     if (!canvas || !ctx) return;
 
     const resetGame = () => {
+      const initialDistance = startLevelIndex > 0 ? VICTORY_DISTANCE * (LEVEL_THRESHOLDS[startLevelIndex] / 100) : 0;
+
       playerRef.current = {
         id: 0, x: 150, y: 300, width: 90, height: 40, markedForDeletion: false,
         vy: 0, lives: 3, snowballs: 3, isInvincible: false, invincibleTimer: 0,
@@ -309,7 +313,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       isExhaustedRef.current = false;
       
       routeStabilityRef.current = INITIAL_STABILITY;
-      distanceRef.current = 0;
+      distanceRef.current = initialDistance;
       scoreRef.current = 0;
       timeRef.current = TOTAL_GAME_TIME_SECONDS;
       shakeRef.current = 0;
@@ -404,6 +408,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           break;
         }
       }
+      // Store reached level in localStorage for next time
+      const maxReached = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
+      if (levelIndex > maxReached) {
+          localStorage.setItem('sleigh_ride_max_level', levelIndex.toString());
+      }
+
       const level = LEVELS[levelIndex];
 
       if (!isEndingSequenceRef.current) {
@@ -506,6 +516,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       } else {
           isLightsOutRef.current = false;
           saturationRef.current = Math.min(1.0, saturationRef.current + 0.01);
+      }
+
+      // Trail Particles
+      trailTimerRef.current += dt;
+      if (trailTimerRef.current > 0.1) {
+          trailTimerRef.current = 0;
+          createParticles(player.x, player.y + 20, ParticleType.TRAIL, 1, 'rgba(255,255,255,0.3)');
       }
 
       // Logic Updates
@@ -651,6 +668,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           applyPowerup(pup.type);
           soundManager.playPowerup(pup.type);
           createParticles(pup.x, pup.y, ParticleType.SPARKLE, 20, POWERUP_COLORS[pup.type]);
+          createParticles(pup.x, pup.y, ParticleType.GLOW, 10, POWERUP_COLORS[pup.type]);
           collectedPowerupsRef.current.push({ id: Date.now() + Math.random(), type: pup.type });
         }
       });
@@ -664,6 +682,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               letter.markedForDeletion = true;
               soundManager.playCollectWish();
               createParticles(letter.x, letter.y, ParticleType.SPARKLE, 15, '#fbbf24');
+              createParticles(letter.x, letter.y, ParticleType.GLOW, 5, 'gold');
               routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 10);
               wishesCollectedCountRef.current += 1;
               activeWishRef.current = { message: letter.message, variant: letter.variant };
@@ -789,6 +808,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           drawWindLines(ctx, timestamp);
       }
 
+      // --- Lighting Overlay ---
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.fillStyle = level.ambientLight;
+      ctx.fillRect(-100, -100, CANVAS_WIDTH + 200, CANVAS_HEIGHT + 200);
+      
+      // Vignette
+      const rad = ctx.createRadialGradient(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, CANVAS_HEIGHT/3, CANVAS_WIDTH/2, CANVAS_HEIGHT/2, CANVAS_HEIGHT);
+      rad.addColorStop(0, 'rgba(0,0,0,0)');
+      rad.addColorStop(1, 'rgba(0,0,0,0.4)');
+      ctx.fillStyle = rad;
+      ctx.globalCompositeOperation = 'source-over'; // Multiply or normal depending on look
+      ctx.fillRect(0,0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
       if (isLightsOutRef.current) {
          ctx.fillStyle = "rgba(0,0,0,0.5)";
          ctx.fillRect(0,0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -803,7 +835,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [gameState, cinematicMode, gameMode]);
+  }, [gameState, cinematicMode, gameMode, startLevelIndex]);
 
   // --- Helper Logic ---
   const checkCollision = (rect1: Entity, rect2: Entity) => {
@@ -854,13 +886,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       createParticles(x, y, ParticleType.SHOCKWAVE, 1, 'white');
       createParticles(x, y, ParticleType.FIRE, 15, '#f87171');
       createParticles(x, y, ParticleType.SMOKE, 10, '#334155');
+      createParticles(x, y, ParticleType.GLOW, 5, '#fb923c');
   };
 
   const updateAndDrawParticle = (ctx: CanvasRenderingContext2D, p: Particle, timestamp: number) => {
       p.x += p.vx; p.y += p.vy; p.life -= 0.016; p.alpha = p.life / p.maxLife; p.radius += p.growth * 0.016;
       ctx.save(); ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color;
+      
       if (p.type === ParticleType.SHOCKWAVE) {
          ctx.strokeStyle = p.color; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.stroke();
+      } else if (p.type === ParticleType.GLOW) {
+         ctx.shadowBlur = 20; ctx.shadowColor = p.color; ctx.globalCompositeOperation = 'screen';
+         ctx.beginPath(); ctx.arc(p.x, p.y, p.radius * 2, 0, Math.PI*2); ctx.fill();
+         ctx.globalCompositeOperation = 'source-over';
+      } else if (p.type === ParticleType.TRAIL) {
+          ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill();
       } else {
          ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill();
       }
@@ -987,6 +1027,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     if (player.isInvincible && Math.floor(Date.now() / 50) % 2 === 0) return;
     ctx.save(); 
     ctx.translate(player.x + player.width/2, player.y + player.height/2); 
+    
+    // Smooth Rotation
     ctx.rotate(player.angle);
     
     // Scale for sprite drawing

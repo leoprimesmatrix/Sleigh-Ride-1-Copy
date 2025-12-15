@@ -38,6 +38,7 @@ export const LEVELS: LevelConfig[] = [
     backgroundGradient: ['#1e293b', '#334155'], // Slate Sky
     groundPalette: ['#475569', '#64748b', '#94a3b8'], // Icy Greys
     terrainType: 'MOUNTAINS',
+    ambientLight: 'rgba(165, 243, 252, 0.15)', // Cold Cyan Tint
     obstacleSpeedMultiplier: 1.0,
     spawnRateMultiplier: 1.2,
     weatherIntensity: 1,
@@ -51,6 +52,7 @@ export const LEVELS: LevelConfig[] = [
     backgroundGradient: ['#020617', '#172554'], // Midnight Blue
     groundPalette: ['#0f172a', '#1e293b', '#334155'], // Dark Buildings
     terrainType: 'CITY',
+    ambientLight: 'rgba(30, 27, 75, 0.3)', // Deep Blue Darkness
     obstacleSpeedMultiplier: 1.1,
     spawnRateMultiplier: 1.3,
     weatherIntensity: 0,
@@ -64,6 +66,7 @@ export const LEVELS: LevelConfig[] = [
     backgroundGradient: ['#0f172a', '#475569'], // Stormy
     groundPalette: ['#1e1b4b', '#312e81', '#4338ca'], // Deep Indigos
     terrainType: 'HILLS',
+    ambientLight: 'rgba(76, 29, 149, 0.2)', // Purple Storm Tint
     obstacleSpeedMultiplier: 1.3,
     spawnRateMultiplier: 0.9,
     weatherIntensity: 3,
@@ -77,6 +80,7 @@ export const LEVELS: LevelConfig[] = [
     backgroundGradient: ['#082f49', '#0ea5e9'], // Cyan/Blue
     groundPalette: ['#164e63', '#155e75', '#0891b2'], // Sharp Ice
     terrainType: 'SPIKES',
+    ambientLight: 'rgba(6, 182, 212, 0.2)', // Sharp Cyan Tint
     obstacleSpeedMultiplier: 1.5,
     spawnRateMultiplier: 1.4,
     weatherIntensity: 5,
@@ -90,6 +94,7 @@ export const LEVELS: LevelConfig[] = [
     backgroundGradient: ['#450a0a', '#991b1b'], // Red warning sky
     groundPalette: ['#450a0a', '#7f1d1d', '#b91c1c'], // Red Tinted Ground
     terrainType: 'MOUNTAINS',
+    ambientLight: 'rgba(127, 29, 29, 0.3)', // Red Warning Tint
     obstacleSpeedMultiplier: 1.2,
     spawnRateMultiplier: 1.0,
     weatherIntensity: 8,

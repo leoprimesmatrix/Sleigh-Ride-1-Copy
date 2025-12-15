@@ -83,7 +83,8 @@ export enum ParticleType {
   SHOCKWAVE,
   FIRE,
   LIFE,
-  DUST
+  DUST,
+  TRAIL
 }
 
 export interface Particle {
@@ -108,6 +109,7 @@ export interface LevelConfig {
   backgroundGradient: [string, string];
   groundPalette: [string, string, string]; // Far, Mid, Near colors
   terrainType: 'MOUNTAINS' | 'CITY' | 'SPIKES' | 'HILLS';
+  ambientLight: string; // CSS color for overlay tint
   obstacleSpeedMultiplier: number;
   spawnRateMultiplier: number;
   weatherIntensity: number;

@@ -4,15 +4,17 @@ import GameCanvas from './components/GameCanvas.tsx';
 import VictorySequence from './components/VictorySequence.tsx';
 import BadEndingSequence from './components/BadEndingSequence.tsx';
 import { GameState, PowerupType, GameMode } from './types.ts';
-import { POWERUP_COLORS } from './constants.ts';
-import { Play, RefreshCw, HelpCircle, ArrowLeft, Loader2, FileText, X, Bell, Gift, Lock, Infinity as InfinityIcon, Zap } from 'lucide-react';
+import { POWERUP_COLORS, LEVELS } from './constants.ts';
+import { Play, RefreshCw, HelpCircle, ArrowLeft, Loader2, FileText, X, Bell, Gift, Lock, Infinity as InfinityIcon, Zap, Map as MapIcon, ChevronRight, ChevronLeft } from 'lucide-react';
 import Logo from './components/Logo.tsx';
 
-const CURRENT_VERSION = '1.0.0';
+const CURRENT_VERSION = '1.0.1';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
   const [gameMode, setGameMode] = useState<GameMode>(GameMode.STORY);
+  const [selectedLevel, setSelectedLevel] = useState(0);
+  const [showLevelSelect, setShowLevelSelect] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("Connecting to servers...");
@@ -20,6 +22,7 @@ const App: React.FC = () => {
   const [showUpdateNotification, setShowUpdateNotification] = useState(false);
   
   const [isStoryComplete, setIsStoryComplete] = useState(false);
+  const [maxLevelReached, setMaxLevelReached] = useState(0);
   const [hasSeenIntro, setHasSeenIntro] = useState(false);
 
   const [introStage, setIntroStage] = useState(0);
@@ -32,10 +35,12 @@ const App: React.FC = () => {
     
     const storyComplete = localStorage.getItem('sleigh_ride_story_complete') === 'true';
     const introSeen = localStorage.getItem('sleigh_ride_intro_seen') === 'true';
+    const savedMaxLevel = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
     
     setIsStoryComplete(storyComplete);
     setHasSeenIntro(introSeen);
-  }, []);
+    setMaxLevelReached(savedMaxLevel);
+  }, [gameState]); // Re-check when game state changes (e.g. game over)
   
   useEffect(() => {
     if (gameState === GameState.INTRO) {
@@ -62,10 +67,9 @@ const App: React.FC = () => {
     }
   }, [gameState, hasSeenIntro]);
 
-  const handleStartClick = (mode: GameMode) => {
-    if (mode === GameMode.ENDLESS && !isStoryComplete) return;
-
+  const handleStartGame = (mode: GameMode, levelIndex: number = 0) => {
     setGameMode(mode);
+    setSelectedLevel(levelIndex);
     setIsLoading(true);
     setLoadingText(mode === GameMode.STORY ? "Synchronizing North Pole Data..." : "Calibrating Infinite Loop...");
     
@@ -81,18 +85,17 @@ const App: React.FC = () => {
           setIsStoryComplete(true);
           localStorage.setItem('sleigh_ride_story_complete', 'true');
       }
+      // Max level updated inside GameCanvas usually, but double check here
+      const current = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
+      if (selectedLevel >= current && current < LEVELS.length - 1) {
+          localStorage.setItem('sleigh_ride_max_level', (current + 1).toString());
+      }
   };
 
   const restartGame = () => setGameState(GameState.MENU);
 
   const handleDismissUpdate = () => {
     setShowUpdateNotification(false);
-    localStorage.setItem('sleigh_ride_version', CURRENT_VERSION);
-  };
-
-  const handleViewUpdateNotes = () => {
-    setShowUpdateNotification(false);
-    setShowPatchNotes(true);
     localStorage.setItem('sleigh_ride_version', CURRENT_VERSION);
   };
 
@@ -105,22 +108,35 @@ const App: React.FC = () => {
   // Cinematic Background for Menu
   const MenuBackground = () => (
     <div className="absolute inset-0 overflow-hidden z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_100%,_#1e1b4b_0%,_#020617_100%)]"></div>
-        {/* Stars */}
-        {[...Array(50)].map((_, i) => (
-            <div key={i} className="absolute bg-white rounded-full opacity-50 animate-pulse"
-                style={{
-                    top: `${Math.random() * 80}%`,
-                    left: `${Math.random() * 100}%`,
-                    width: `${Math.random() * 2}px`,
-                    height: `${Math.random() * 2}px`,
-                    animationDelay: `${Math.random() * 5}s`
-                }}
-            />
-        ))}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0f172a] via-[#1e293b] to-[#0f172a]"></div>
+        
+        {/* CSS Snow */}
+        <div className="absolute inset-0 pointer-events-none">
+            {[...Array(50)].map((_, i) => (
+                <div 
+                    key={i}
+                    className="absolute bg-white rounded-full opacity-60 animate-[fall_linear_infinite]"
+                    style={{
+                        left: `${Math.random() * 100}%`,
+                        top: `-${Math.random() * 20}px`,
+                        width: `${Math.random() * 3 + 2}px`,
+                        height: `${Math.random() * 3 + 2}px`,
+                        animationDuration: `${Math.random() * 5 + 5}s`,
+                        animationDelay: `${Math.random() * 5}s`
+                    }}
+                />
+            ))}
+        </div>
+        
+        <style>{`
+            @keyframes fall {
+                to { transform: translateY(110vh); }
+            }
+        `}</style>
+        
         {/* Ambient Glow */}
-        <div className="absolute bottom-[-10%] left-[20%] w-[40vw] h-[40vw] bg-green-900/20 rounded-full blur-[100px] animate-pulse-slow"></div>
-        <div className="absolute top-[-10%] right-[10%] w-[30vw] h-[30vw] bg-red-900/10 rounded-full blur-[100px] animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute bottom-[-20%] left-[10%] w-[50vw] h-[50vw] bg-blue-900/20 rounded-full blur-[120px] animate-pulse-slow"></div>
+        <div className="absolute top-[-10%] right-[10%] w-[30vw] h-[30vw] bg-purple-900/10 rounded-full blur-[100px] animate-pulse-slow" style={{ animationDelay: '2s' }}></div>
     </div>
   );
 
@@ -131,91 +147,144 @@ const App: React.FC = () => {
         <>
             <MenuBackground />
             
-            <div className="relative z-10 w-full max-w-7xl h-full flex flex-col md:flex-row items-center justify-center p-6 gap-12">
+            <div className="relative z-10 w-full max-w-7xl h-full flex flex-col items-center justify-center p-6 gap-8">
                 
-                {/* Left Side: Brand */}
-                <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left space-y-6 animate-slide-in-right">
-                    <div className="relative group">
-                         <div className="absolute -inset-1 bg-gradient-to-r from-red-600 to-green-600 rounded-lg blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-                         <Logo className="relative w-[300px] md:w-[450px] drop-shadow-2xl" />
+                {/* Brand */}
+                <div className={`flex flex-col items-center text-center space-y-6 transition-all duration-500 ${showLevelSelect ? 'scale-75 translate-y-[-20px]' : ''}`}>
+                    <div className="relative group cursor-pointer hover:scale-105 transition-transform duration-300">
+                         <div className="absolute -inset-4 bg-gradient-to-r from-red-600/50 to-green-600/50 rounded-full blur-xl opacity-20 group-hover:opacity-60 animate-pulse-slow"></div>
+                         <Logo className="relative w-[300px] md:w-[500px] drop-shadow-2xl" />
                     </div>
-                    <div className="space-y-2">
-                        <p className="text-xl md:text-2xl font-light tracking-[0.2em] text-blue-200 uppercase">
-                            Adventure awaits
-                        </p>
-                        <p className="text-sm text-slate-400 max-w-md">
-                            Navigate the storm. Restore belief. Deliver hope before the clock strikes midnight.
-                        </p>
-                    </div>
+                    {!showLevelSelect && (
+                        <div className="space-y-2 animate-fade-in-up">
+                            <p className="text-xl md:text-2xl font-light tracking-[0.3em] text-blue-200 uppercase drop-shadow-md">
+                                Operation: Hope
+                            </p>
+                        </div>
+                    )}
                 </div>
 
-                {/* Right Side: Menu */}
-                <div className="flex-1 w-full max-w-md space-y-4 animate-slide-up">
-                    <div className="bg-slate-900/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden group">
-                        
-                        <div className="absolute top-0 right-0 p-4 opacity-50">
-                             <div className="w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-full blur-2xl"></div>
-                        </div>
-
-                        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6 border-b border-white/5 pb-2">Select Operation</h2>
-
-                        <div className="space-y-4">
+                {/* Main Menu / Level Select */}
+                <div className="w-full max-w-4xl relative min-h-[400px] flex items-center justify-center">
+                    
+                    {!showLevelSelect ? (
+                        /* MAIN BUTTONS */
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl animate-fade-in-up delay-100">
                             <button 
-                                onClick={() => handleStartClick(GameMode.STORY)}
-                                className="w-full group relative px-6 py-5 bg-gradient-to-r from-slate-800 to-slate-800 hover:from-red-900/80 hover:to-slate-800 rounded-xl border border-white/5 hover:border-red-500/50 transition-all duration-300 shadow-lg hover:shadow-red-900/20 overflow-hidden text-left"
+                                onClick={() => setShowLevelSelect(true)}
+                                className="group relative h-48 bg-slate-800/40 backdrop-blur-md rounded-2xl border border-white/10 hover:border-red-500/50 transition-all hover:bg-slate-800/60 flex flex-col items-center justify-center gap-4 overflow-hidden shadow-2xl hover:shadow-red-900/20"
                             >
-                                <div className="relative z-10 flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 bg-red-500/20 rounded-lg text-red-400 group-hover:text-white group-hover:bg-red-500 transition-colors">
-                                            <Play size={24} fill="currentColor" />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-lg text-white">Story Campaign</h3>
-                                            <p className="text-xs text-slate-400 group-hover:text-slate-200">The journey to save Christmas.</p>
-                                        </div>
-                                    </div>
-                                    <ArrowLeft className="rotate-180 opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-10px] group-hover:translate-x-0" size={20} />
+                                <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <div className="p-4 rounded-full bg-red-500/10 text-red-400 group-hover:bg-red-500 group-hover:text-white transition-all transform group-hover:scale-110">
+                                    <Play size={40} fill="currentColor" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="text-2xl font-bold text-white tracking-wide">Story Mode</h3>
+                                    <p className="text-slate-400 text-sm mt-1">Save Christmas across {LEVELS.length} levels</p>
                                 </div>
                             </button>
 
                             <button 
-                                onClick={() => handleStartClick(GameMode.ENDLESS)}
+                                onClick={() => handleStartGame(GameMode.ENDLESS)}
                                 disabled={!isStoryComplete}
-                                className={`w-full group relative px-6 py-5 rounded-xl border transition-all duration-300 text-left overflow-hidden ${
+                                className={`group relative h-48 backdrop-blur-md rounded-2xl border transition-all flex flex-col items-center justify-center gap-4 overflow-hidden shadow-2xl ${
                                     isStoryComplete 
-                                    ? 'bg-gradient-to-r from-slate-800 to-slate-800 hover:from-purple-900/80 hover:to-slate-800 border-white/5 hover:border-purple-500/50 cursor-pointer shadow-lg hover:shadow-purple-900/20' 
-                                    : 'bg-slate-900/50 border-transparent opacity-50 cursor-not-allowed'
+                                    ? 'bg-slate-800/40 border-white/10 hover:border-purple-500/50 hover:bg-slate-800/60 hover:shadow-purple-900/20 cursor-pointer' 
+                                    : 'bg-slate-900/40 border-transparent opacity-60 cursor-not-allowed grayscale'
                                 }`}
                             >
-                                <div className="relative z-10 flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`p-3 rounded-lg transition-colors ${isStoryComplete ? 'bg-purple-500/20 text-purple-400 group-hover:text-white group-hover:bg-purple-500' : 'bg-slate-800 text-slate-600'}`}>
-                                            {isStoryComplete ? <InfinityIcon size={24} /> : <Lock size={24} />}
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-lg text-white">Endless Mode</h3>
-                                            <p className="text-xs text-slate-400">
-                                                {isStoryComplete ? "Survival challenge." : "Complete Story to unlock."}
-                                            </p>
-                                        </div>
-                                    </div>
+                                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <div className={`p-4 rounded-full transition-all transform group-hover:scale-110 ${isStoryComplete ? 'bg-purple-500/10 text-purple-400 group-hover:bg-purple-500 group-hover:text-white' : 'bg-slate-800 text-slate-600'}`}>
+                                    {isStoryComplete ? <InfinityIcon size={40} /> : <Lock size={40} />}
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="text-2xl font-bold text-white tracking-wide">Endless Mode</h3>
+                                    <p className="text-slate-400 text-sm mt-1">
+                                        {isStoryComplete ? "Test your endurance" : "Complete Story to Unlock"}
+                                    </p>
                                 </div>
                             </button>
+                            
+                            <div className="md:col-span-2 flex justify-center gap-4 mt-4">
+                                <button onClick={() => setShowPatchNotes(true)} className="px-6 py-2 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white text-sm font-bold uppercase tracking-wider transition-colors">
+                                    Updates
+                                </button>
+                                <button onClick={() => setGameState(GameState.HELP)} className="px-6 py-2 rounded-full bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-white text-sm font-bold uppercase tracking-wider transition-colors">
+                                    Manual
+                                </button>
+                            </div>
                         </div>
+                    ) : (
+                        /* LEVEL SELECT */
+                        <div className="w-full h-full flex flex-col animate-fade-in-up">
+                            <div className="flex items-center justify-between mb-6 px-4">
+                                <button 
+                                    onClick={() => setShowLevelSelect(false)}
+                                    className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+                                >
+                                    <ArrowLeft size={20} /> Back
+                                </button>
+                                <h2 className="text-xl font-bold uppercase tracking-widest text-slate-200">Select Zone</h2>
+                                <div className="w-20"></div> {/* Spacer */}
+                            </div>
 
-                        <div className="mt-8 flex gap-3">
-                             <button onClick={() => setShowPatchNotes(true)} className="flex-1 py-3 bg-slate-800/50 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors border border-white/5 hover:border-white/20">
-                                Updates
-                             </button>
-                             <button onClick={() => setGameState(GameState.HELP)} className="flex-1 py-3 bg-slate-800/50 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors border border-white/5 hover:border-white/20">
-                                How to Play
-                             </button>
+                            <div className="flex-1 overflow-x-auto custom-scrollbar pb-4 flex gap-6 px-4 snap-x snap-mandatory">
+                                {LEVELS.map((level, index) => {
+                                    const isLocked = index > maxLevelReached;
+                                    return (
+                                        <button
+                                            key={index}
+                                            disabled={isLocked}
+                                            onClick={() => handleStartGame(GameMode.STORY, index)}
+                                            className={`relative min-w-[280px] md:min-w-[320px] h-[360px] rounded-3xl border snap-center transition-all duration-300 flex flex-col overflow-hidden group text-left
+                                                ${isLocked 
+                                                    ? 'bg-slate-900/60 border-slate-800 opacity-60' 
+                                                    : 'bg-slate-800/60 border-slate-700 hover:border-white/50 hover:scale-[1.02] shadow-2xl'
+                                                }`}
+                                        >
+                                            {/* Level Preview Gradient */}
+                                            <div 
+                                                className="h-40 w-full relative"
+                                                style={{ background: `linear-gradient(to bottom, ${level.backgroundGradient[0]}, ${level.backgroundGradient[1]})` }}
+                                            >
+                                                {isLocked && (
+                                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                                        <Lock size={48} className="text-slate-500" />
+                                                    </div>
+                                                )}
+                                                {!isLocked && (
+                                                     <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors"></div>
+                                                )}
+                                                <div className="absolute bottom-4 left-4">
+                                                    <span className="text-xs font-bold uppercase tracking-widest text-white/80 bg-black/40 px-2 py-1 rounded">
+                                                        Zone {index + 1}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-6 flex-1 flex flex-col relative">
+                                                <h3 className={`text-2xl font-christmas font-bold mb-2 ${isLocked ? 'text-slate-500' : 'text-white'}`}>
+                                                    {level.name}
+                                                </h3>
+                                                <p className="text-sm text-slate-400 mb-4 line-clamp-3 leading-relaxed">
+                                                    {isLocked ? "Complete previous zones to access this area." : level.description}
+                                                </p>
+                                                
+                                                {!isLocked && (
+                                                    <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between text-xs text-slate-500 uppercase tracking-wider">
+                                                        <span>Difficulty: {'★'.repeat(Math.ceil(level.obstacleSpeedMultiplier))}</span>
+                                                        <span className="group-hover:translate-x-1 transition-transform flex items-center gap-1 text-white">
+                                                            Deploy <ChevronRight size={14} />
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div className="text-center">
-                        <p className="text-[10px] text-slate-600 uppercase tracking-widest">Version {CURRENT_VERSION}</p>
-                    </div>
+                    )}
                 </div>
             </div>
         </>
@@ -228,23 +297,17 @@ const App: React.FC = () => {
                   <Bell size={32} />
               </div>
               
-              <h2 className="text-2xl font-bold text-white mb-2">New Update Available</h2>
+              <h2 className="text-2xl font-bold text-white mb-2">Update Installed</h2>
               <p className="text-slate-400 text-sm mb-8 leading-relaxed">
-                Sleigh Ride v{CURRENT_VERSION} brings polished graphics, new city environments, and a cinematic interface.
+                Welcome to v{CURRENT_VERSION}. New visuals, level selector, and improved stability.
               </p>
               
               <div className="flex flex-col gap-3">
                 <button 
-                  onClick={handleViewUpdateNotes}
+                  onClick={handleDismissUpdate}
                   className="w-full py-3 bg-white text-slate-900 hover:bg-slate-200 rounded-xl font-bold transition-all transform hover:scale-[1.02]"
                 >
-                  View Patch Notes
-                </button>
-                <button 
-                  onClick={handleDismissUpdate}
-                  className="w-full py-3 text-slate-500 hover:text-slate-300 font-medium text-sm transition-colors"
-                >
-                  Dismiss
+                  Let's Fly!
                 </button>
               </div>
            </div>
@@ -268,24 +331,22 @@ const App: React.FC = () => {
                <div className="p-8 overflow-y-auto custom-scrollbar space-y-8">
                   <div className="space-y-4">
                       <h3 className="text-lg font-bold text-blue-400 flex items-center gap-2">
+                          <MapIcon size={18} /> Level Selector
+                      </h3>
+                      <ul className="space-y-2 text-slate-300 text-sm list-disc pl-5">
+                          <li>Added <strong>Zone Select</strong> for Story Mode. Replay your favorite levels!</li>
+                          <li>Unlock new zones by completing the previous ones.</li>
+                      </ul>
+                  </div>
+                  
+                  <div className="space-y-4">
+                      <h3 className="text-lg font-bold text-yellow-400 flex items-center gap-2">
                           <Zap size={18} /> Visual Overhaul
                       </h3>
                       <ul className="space-y-2 text-slate-300 text-sm list-disc pl-5">
-                          <li>Completely redesigned Title Screen with cinematic atmosphere.</li>
-                          <li>New <strong>Level Environments</strong>: Distinct visuals for City, Mountains, and Ice Spikes.</li>
-                          <li>Enhanced <strong>Parallax Scrolling</strong> for better depth perception.</li>
-                          <li>Modernized <strong>HUD (Heads-Up Display)</strong> with glassmorphism effects.</li>
-                      </ul>
-                  </div>
-
-                  <div className="space-y-4">
-                      <h3 className="text-lg font-bold text-green-400 flex items-center gap-2">
-                          <RefreshCw size={18} /> Gameplay Balancing
-                      </h3>
-                      <ul className="space-y-2 text-slate-300 text-sm list-disc pl-5">
-                          <li>Increased <strong>Stamina Pool</strong> (approx 20 jumps).</li>
-                          <li>Added <strong>Ground Recharge</strong>: Touching the ground restores stamina faster.</li>
-                          <li>Adjusted obstacle spawning in the "Dark Metropolis" level.</li>
+                          <li><strong>Lighting Engine</strong>: Dynamic ambient lighting for each level.</li>
+                          <li><strong>Particle Effects</strong>: Improved collision, powerup, and trail effects.</li>
+                          <li><strong>UI Polish</strong>: Modern glassmorphism menus and HUD.</li>
                       </ul>
                   </div>
                </div>
@@ -370,6 +431,7 @@ const App: React.FC = () => {
                  setGameState(newState);
             }} 
             onWin={handleWin}
+            startLevelIndex={selectedLevel}
           />
           
           {gameState === GameState.INTRO && !hasSeenIntro && (
@@ -429,7 +491,7 @@ const App: React.FC = () => {
                     <ArrowLeft size={20} /> Return to Base
                   </button>
                   <button 
-                    onClick={() => handleStartClick(gameMode)}
+                    onClick={() => handleStartGame(gameMode, selectedLevel)}
                     className="px-8 py-4 bg-white text-slate-900 rounded-full font-bold text-lg hover:bg-slate-200 hover:scale-105 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)] flex items-center gap-2"
                   >
                     <RefreshCw size={20} /> Retry Mission
