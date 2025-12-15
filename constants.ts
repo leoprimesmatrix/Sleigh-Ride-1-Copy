@@ -3,18 +3,19 @@ import { LevelConfig, PowerupType, DialogueLine } from './types.ts';
 
 export const CANVAS_WIDTH = 1200;
 export const CANVAS_HEIGHT = 600;
-export const GRAVITY = 0.5; // Slightly heavier feeling
+export const GRAVITY = 0.5; 
 export const JUMP_STRENGTH = -9;
 export const FLIGHT_LIFT = -0.6;
 export const BASE_SPEED = 7;
 
-// Reindeer Physics Constants
-export const MAX_STAMINA = 150; // Increased from 100
-export const JUMP_STAMINA_COST = 12; // Decreased from 20
-export const BOOST_STAMINA_COST = 0.5; // Decreased from 0.8
-export const STAMINA_REGEN = 0.5; // Increased from 0.4
-export const STAMINA_RECOVERY_THRESHOLD = 20; // Lowered from 25
-export const LOW_STAMINA_PENALTY = 0.5; 
+// Reindeer Physics Constants (Rebalanced)
+export const MAX_STAMINA = 200; // Increased to allow ~20 jumps
+export const JUMP_STAMINA_COST = 10; // Reduced cost
+export const BOOST_STAMINA_COST = 0; // Removing continuous boost cost for now to simplify
+export const STAMINA_REGEN_GROUND = 2.0; // Fast regen when grounded
+export const STAMINA_REGEN_AIR = 0.3; // Slow regen when gliding down
+export const STAMINA_RECOVERY_THRESHOLD = 15; // Easier to recover from exhaustion
+export const LOW_STAMINA_PENALTY = 0.6; // Less punishing weak jump
 
 export const INITIAL_STABILITY = 100;
 export const REQUIRED_WISHES = 80;

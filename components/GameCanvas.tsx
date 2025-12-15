@@ -37,11 +37,11 @@ import {
   REQUIRED_WISHES,
   MAX_STAMINA,
   JUMP_STAMINA_COST,
-  STAMINA_REGEN,
+  STAMINA_REGEN_GROUND,
+  STAMINA_REGEN_AIR,
   INITIAL_STABILITY,
   LOW_STAMINA_PENALTY,
-  STAMINA_RECOVERY_THRESHOLD,
-  BOOST_STAMINA_COST
+  STAMINA_RECOVERY_THRESHOLD
 } from '../constants.ts';
 import UIOverlay from './UIOverlay.tsx';
 import { soundManager } from '../audio.ts';
@@ -179,33 +179,37 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const handleJump = () => {
       const player = playerRef.current;
       
-      // If exhausted, player can't jump until regenerated
+      // If exhausted, player can only do weak jumps until recovered
       if (isExhaustedRef.current) {
-          // Play failed jump sound or shake visual?
+          player.vy = JUMP_STRENGTH * LOW_STAMINA_PENALTY;
+          // Small penalty to keep it at 0 if they spam
+          player.stamina = 0; 
           return;
       }
 
       // Normal Jump
-      if (player.stamina > JUMP_STAMINA_COST) {
+      if (player.stamina >= JUMP_STAMINA_COST) {
           player.vy = JUMP_STRENGTH;
-          player.stamina = Math.max(0, player.stamina - JUMP_STAMINA_COST);
+          player.stamina -= JUMP_STAMINA_COST;
           soundManager.playJump();
-          createParticles(player.x, player.y + 30, ParticleType.SMOKE, 8, '#cbd5e1'); // Magic dust
+          createParticles(player.x, player.y + 30, ParticleType.SMOKE, 5, '#cbd5e1'); // Magic dust
       } else {
-          // Entered Exhaustion
+          // Enter Exhaustion (The "Last Gasp" Jump)
           isExhaustedRef.current = true;
-          player.vy = JUMP_STRENGTH * LOW_STAMINA_PENALTY;
+          player.vy = JUMP_STRENGTH * 0.8; // Almost full jump for the last one
           player.stamina = 0;
-          soundManager.playTimeWarning(); // Re-use warning sound for exhaustion
+          soundManager.playTimeWarning();
       }
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Backquote') {
+      // Global Debug Toggle - Works in any state
+      if (e.key === '~' || e.code === 'Backquote') {
           setDebugMenuOpen(prev => !prev);
           return;
       }
+      
       if (gameState === GameState.MENU) soundManager.init();
       if (gameState !== GameState.PLAYING) return;
       
@@ -410,24 +414,27 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           if (routeStabilityRef.current <= 0) routeStabilityRef.current = 0;
       }
 
-      // --- Stamina System ---
+      // --- Stamina System (Improved) ---
       const isOnGround = player.y >= CANVAS_HEIGHT - 55 - player.height;
+      
       if (isOnGround) {
           if (!wasOnGroundRef.current) {
+               // Landing effects
                createParticles(player.x + 20, player.y + player.height, ParticleType.DUST, 15, '#cbd5e1');
           }
           wasOnGroundRef.current = true;
-          player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN * 2 * timeScale); // Fast regen on ground
+          // GROUND REGEN: Fast
+          player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN_GROUND * timeScale); 
       } else {
           wasOnGroundRef.current = false;
-          // Gliding recovers stamina, but slower
+          // AIR REGEN: Slow, only if gliding down
           if (player.vy > 0) {
-               player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN * timeScale);
+               player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN_AIR * timeScale);
           }
       }
 
+      // Exhaustion Recovery Check
       if (isExhaustedRef.current) {
-          // Check if recovered enough
           if (player.stamina >= STAMINA_RECOVERY_THRESHOLD) {
               isExhaustedRef.current = false;
           }
@@ -937,6 +944,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     ctx.fillStyle = "#ef4444"; ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 10;
     ctx.beginPath(); ctx.arc(68, -10 + droop, 3, 0, Math.PI*2); ctx.fill();
     ctx.shadowBlur = 0;
+    
+    // Sweat drops if exhausted
+    if (isExhaustedRef.current) {
+        const dropY = (timestamp % 500) / 10;
+        ctx.fillStyle = "#38bdf8"; 
+        ctx.beginPath(); ctx.arc(55, -20 + dropY, 3, 0, Math.PI*2); ctx.fill();
+    }
 
     // Harness
     ctx.strokeStyle = "#fcd34d"; ctx.lineWidth = 1;
@@ -1146,29 +1160,40 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   };
 
   return (
-    <div className="relative w-full h-full max-w-[1200px] max-h-[600px] mx-auto border-4 border-slate-800 shadow-2xl rounded-xl overflow-hidden bg-black">
+    <div className="relative w-full h-full max-w-[1200px] max-h-[600px] mx-auto border-4 border-slate-800 shadow-2xl rounded-xl overflow-hidden bg-black group">
       <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-cover" />
       {gameState !== GameState.INTRO && !cinematicMode && !isEndingSequenceRef.current && (
-        <UIOverlay 
-          lives={hudState.lives}
-          snowballs={hudState.snowballs}
-          progress={hudState.progress}
-          timeLeft={hudState.timeLeft}
-          activePowerups={hudState.activeSpeed + hudState.activeHealing}
-          currentLevelName={gameMode === GameMode.ENDLESS ? "Endless Loop" : LEVELS[hudState.levelIndex].name}
-          score={hudState.score}
-          collectedPowerups={hudState.collectedPowerups}
-          activeDialogue={hudState.activeDialogue}
-          activeWish={hudState.activeWish}
-          wishesCollected={hudState.wishesCollected}
-          stamina={hudState.stamina}
-          stability={hudState.stability}
-        />
+        <>
+          <UIOverlay 
+            lives={hudState.lives}
+            snowballs={hudState.snowballs}
+            progress={hudState.progress}
+            timeLeft={hudState.timeLeft}
+            activePowerups={hudState.activeSpeed + hudState.activeHealing}
+            currentLevelName={gameMode === GameMode.ENDLESS ? "Endless Loop" : LEVELS[hudState.levelIndex].name}
+            score={hudState.score}
+            collectedPowerups={hudState.collectedPowerups}
+            activeDialogue={hudState.activeDialogue}
+            activeWish={hudState.activeWish}
+            wishesCollected={hudState.wishesCollected}
+            stamina={hudState.stamina}
+            stability={hudState.stability}
+          />
+          
+          {/* Debug Button (Top Right) - Only shows on hover or active */}
+          <button 
+            onClick={() => setDebugMenuOpen(!debugMenuOpen)}
+            className="absolute top-4 right-4 z-50 p-2 text-slate-500 hover:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Open Debug Menu"
+          >
+            <Bug size={16} />
+          </button>
+        </>
       )}
       
       {/* Debug Menu Overlay */}
       {debugMenuOpen && (
-          <div className="absolute top-20 left-4 bg-slate-900/95 border border-green-500/50 p-4 rounded-xl shadow-2xl backdrop-blur-md z-50 text-green-400 font-mono text-xs w-64 animate-fade-in-down">
+          <div className="absolute top-12 right-4 bg-slate-900/95 border border-green-500/50 p-4 rounded-xl shadow-2xl backdrop-blur-md z-50 text-green-400 font-mono text-xs w-64 animate-fade-in-down">
             <div className="flex items-center justify-between border-b border-green-500/30 mb-3 pb-2">
                 <h3 className="font-bold flex items-center gap-2"><Bug size={14} /> DEBUG CONSOLE</h3>
                 <span className="text-[10px] bg-green-900/50 px-2 py-0.5 rounded text-green-300">DEV BUILD</span>
