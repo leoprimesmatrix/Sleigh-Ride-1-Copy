@@ -9,12 +9,12 @@ export const FLIGHT_LIFT = -0.6;
 export const BASE_SPEED = 7;
 
 // Reindeer Physics Constants
-export const MAX_STAMINA = 100;
-export const JUMP_STAMINA_COST = 20;
-export const BOOST_STAMINA_COST = 0.8; // Cost per frame for holding up
-export const STAMINA_REGEN = 0.4; // Base regen
-export const STAMINA_RECOVERY_THRESHOLD = 25; // Must reach this % to jump again if exhausted
-export const LOW_STAMINA_PENALTY = 0.4; 
+export const MAX_STAMINA = 150; // Increased from 100
+export const JUMP_STAMINA_COST = 12; // Decreased from 20
+export const BOOST_STAMINA_COST = 0.5; // Decreased from 0.8
+export const STAMINA_REGEN = 0.5; // Increased from 0.4
+export const STAMINA_RECOVERY_THRESHOLD = 20; // Lowered from 25
+export const LOW_STAMINA_PENALTY = 0.5; 
 
 export const INITIAL_STABILITY = 100;
 export const REQUIRED_WISHES = 80;

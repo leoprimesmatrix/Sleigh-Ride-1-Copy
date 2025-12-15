@@ -45,7 +45,7 @@ import {
 } from '../constants.ts';
 import UIOverlay from './UIOverlay.tsx';
 import { soundManager } from '../audio.ts';
-import { Eye, EyeOff, Skull, Trophy, Camera, FastForward, Mail, BatteryWarning } from 'lucide-react';
+import { Eye, EyeOff, Skull, Trophy, Camera, FastForward, Mail, BatteryWarning, Bug, ChevronsRight, Heart, Snowflake } from 'lucide-react';
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -1166,6 +1166,37 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         />
       )}
       
+      {/* Debug Menu Overlay */}
+      {debugMenuOpen && (
+          <div className="absolute top-20 left-4 bg-slate-900/95 border border-green-500/50 p-4 rounded-xl shadow-2xl backdrop-blur-md z-50 text-green-400 font-mono text-xs w-64 animate-fade-in-down">
+            <div className="flex items-center justify-between border-b border-green-500/30 mb-3 pb-2">
+                <h3 className="font-bold flex items-center gap-2"><Bug size={14} /> DEBUG CONSOLE</h3>
+                <span className="text-[10px] bg-green-900/50 px-2 py-0.5 rounded text-green-300">DEV BUILD</span>
+            </div>
+            
+            <div className="space-y-2">
+                <button onClick={() => { playerRef.current.isInvincible = !playerRef.current.isInvincible; }} className="w-full text-left px-3 py-2 hover:bg-green-500/10 rounded border border-transparent hover:border-green-500/30 transition-all flex items-center gap-2">
+                    <Eye size={12} /> Toggle God Mode
+                </button>
+                <button onClick={() => { playerRef.current.stamina = 9999; playerRef.current.maxStamina = 9999; isExhaustedRef.current = false; }} className="w-full text-left px-3 py-2 hover:bg-green-500/10 rounded border border-transparent hover:border-green-500/30 transition-all flex items-center gap-2">
+                    <BatteryWarning size={12} /> Infinite Stamina
+                </button>
+                <button onClick={() => { distanceRef.current += 50000; }} className="w-full text-left px-3 py-2 hover:bg-green-500/10 rounded border border-transparent hover:border-green-500/30 transition-all flex items-center gap-2">
+                    <ChevronsRight size={12} /> Skip Distance (+50k)
+                </button>
+                <button onClick={() => { playerRef.current.lives = 100; }} className="w-full text-left px-3 py-2 hover:bg-green-500/10 rounded border border-transparent hover:border-green-500/30 transition-all flex items-center gap-2">
+                    <Heart size={12} /> Add Lives
+                </button>
+                <button onClick={() => { playerRef.current.snowballs += 50; }} className="w-full text-left px-3 py-2 hover:bg-green-500/10 rounded border border-transparent hover:border-green-500/30 transition-all flex items-center gap-2">
+                    <Snowflake size={12} /> Refill Snowballs
+                </button>
+            </div>
+            <div className="mt-3 pt-2 border-t border-green-500/30 text-[10px] text-green-600 text-center">
+                Press `~` (Tilde) to toggle
+            </div>
+          </div>
+      )}
+
       <div className="absolute inset-0 flex md:hidden z-40 pointer-events-auto">
         <div className="w-1/2 h-full" onTouchStart={(e) => { e.preventDefault(); if(!isEndingSequenceRef.current) handleJump(); }} />
         <div className="w-1/2 h-full" onTouchStart={(e) => { e.preventDefault(); if(!isEndingSequenceRef.current) shootSnowball(); }} />
