@@ -76,6 +76,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const projectilesRef = useRef<Projectile[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   
+  // New Ambient Snow Particles
+  const snowParticlesRef = useRef<{x: number, y: number, vx: number, vy: number, size: number}[]>([]);
+  
   // Game System Refs
   const routeStabilityRef = useRef(INITIAL_STABILITY);
   
@@ -92,6 +95,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const masterGiftDroppedRef = useRef(false);
   const wasOnGroundRef = useRef(false);
   const trailTimerRef = useRef(0);
+  
+  // Track last warning sound time
+  const lastStaminaWarnTimeRef = useRef(0);
 
   const collectedPowerupsRef = useRef<{ id: number; type: PowerupType }[]>([]);
   const wishesCollectedCountRef = useRef(0);
@@ -108,6 +114,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const lastFrameTimeRef = useRef(0);
   const shakeRef = useRef(0);
   const lastLevelIndexRef = useRef(-1);
+  
+  // Reference for immediate access to current level index during draw/update loops
+  const currentLevelIndexRef = useRef(startLevelIndex);
   
   const bgLayersRef = useRef<BackgroundLayer[]>([
     { points: [], blocks: [], color: '', speedModifier: 0.1, offset: 0 }, // Far
@@ -160,13 +169,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+  
+  // Sync level index ref
+  useEffect(() => {
+      currentLevelIndexRef.current = startLevelIndex;
+  }, [startLevelIndex]);
 
   const [hudState, setHudState] = useState({
     lives: 3,
     snowballs: 0,
     progress: 0,
     timeLeft: TOTAL_GAME_TIME_SECONDS,
-    levelIndex: startLevelIndex, // FIX: Initialize with passed startLevelIndex
+    levelIndex: startLevelIndex, 
     score: 0,
     activeSpeed: 0,
     activeHealing: 0,
@@ -266,6 +280,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       // FIX: In Story mode, level starts at 0 distance. Discrete levels.
       const initialDistance = (gameMode === GameMode.STORY) ? 0 : 0; 
       
+      // Update Ref immediately for generation
+      currentLevelIndexRef.current = gameMode === GameMode.STORY ? startLevelIndex : 0;
+
       // Reset Player
       playerRef.current = {
         id: 0, x: 150, y: 300, width: 90, height: 40, markedForDeletion: false,
@@ -294,6 +311,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       flashTimerRef.current = 0;
       pausedTimeRef.current = 0;
       isExhaustedRef.current = false;
+      lastStaminaWarnTimeRef.current = 0;
       
       routeStabilityRef.current = INITIAL_STABILITY;
       distanceRef.current = initialDistance;
@@ -310,6 +328,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       lastLevelIndexRef.current = -1;
       
       const currentLogicalWidth = logicalWidthRef.current;
+      
+      // Regenerate Backgrounds based on current Level
+      // Force immediate update of HUD state locally for rendering consistency if needed
+      setHudState(prev => ({ ...prev, levelIndex: currentLevelIndexRef.current }));
+
       bgLayersRef.current[0].points = generateTerrain(250, 100, currentLogicalWidth); 
       bgLayersRef.current[1].points = generateTerrain(150, 60, currentLogicalWidth);  
       bgLayersRef.current[2].points = generateTerrain(60, 30, currentLogicalWidth);
@@ -326,6 +349,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               phase: Math.random() * Math.PI * 2
           });
       }
+      
+      // Init Snow Particles
+      snowParticlesRef.current = [];
+      for (let i = 0; i < 200; i++) {
+          snowParticlesRef.current.push({
+              x: Math.random() * currentLogicalWidth,
+              y: Math.random() * CANVAS_HEIGHT,
+              vx: (Math.random() - 0.5) * 2,
+              vy: Math.random() * 3 + 1,
+              size: Math.random() * 2 + 1
+          });
+      }
+
       bgCloudsRef.current = [];
       for (let i = 0; i < 10; i++) {
           bgCloudsRef.current.push({
@@ -406,10 +442,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       let progressRatio = distanceRef.current / VICTORY_DISTANCE;
       if (gameMode === GameMode.STORY) progressRatio = Math.min(1.02, progressRatio);
 
-      // FIX: Level Index Calculation for Discrete Levels
+      // Level Index Calculation
       let levelIndex = 0;
       if (gameMode === GameMode.STORY) {
-          // In Story Mode, we stay in the selected level.
           levelIndex = startLevelIndex;
       } else {
           // Endless mode logic
@@ -424,6 +459,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
             }
           }
       }
+      
+      // Sync Ref
+      currentLevelIndexRef.current = levelIndex;
       
       // Update max reached level
       const maxReached = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
@@ -457,6 +495,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               isExhaustedRef.current = false;
           }
       }
+      
+      // LOW STAMINA WARNING SOUND
+      if (player.stamina < MAX_STAMINA * 0.25 || isExhaustedRef.current) {
+          const urgency = 1 - (player.stamina / (MAX_STAMINA * 0.25));
+          const interval = Math.max(200, 1000 - (urgency * 800)); // 1000ms down to 200ms
+          
+          if (timestamp - lastStaminaWarnTimeRef.current > interval) {
+              soundManager.playTimeWarning();
+              lastStaminaWarnTimeRef.current = timestamp;
+          }
+      }
 
       const currentSpeedFrame = (BASE_SPEED + (Math.min(progressRatio, 3.0) * 6)); 
       let currentSpeed = isEndingSequenceRef.current ? currentSpeedFrame * 0.5 : currentSpeedFrame * speedMultiplier; 
@@ -470,13 +519,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
       let weatherX = 0;
       let weatherY = 0;
+      
+      // DYNAMIC WEATHER INTENSITY
+      const weatherProgressMultiplier = 1 + (progressRatio * 0.8); // 1.0 to 1.8 intensity increase
+      
       if (level.weatherType === 'WIND_CORRIDOR') {
-          weatherX = -0.15; 
-          weatherY = (Math.random() - 0.5) * 0.3; 
+          weatherX = -0.15 * weatherProgressMultiplier; 
+          weatherY = (Math.random() - 0.5) * 0.3 * weatherProgressMultiplier; 
       } else if (level.weatherType === 'SNOWSTORM') {
-          weatherX = -0.1;
+          weatherX = -0.1 * weatherProgressMultiplier;
       } else if (level.weatherType === 'TURBULENCE') {
-           weatherY = (Math.sin(timestamp / 150) * 0.8);
+           weatherY = (Math.sin(timestamp / 150) * 0.8 * weatherProgressMultiplier);
       }
       
       // Ending / Level Complete Trigger
@@ -518,9 +571,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               player.vy = 0;
               player.y += (200 - player.y) * 0.05 * timeScale;
               
-              // Only spawn Master Gift in Final House level (usually last level) or just trigger win directly
-              // If it's the last level, look for landmark
-              // If regular level, just fly off
               const isLastLevel = levelIndex === LEVELS.length - 1;
               
               if (isLastLevel) {
@@ -774,7 +824,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     };
 
     const draw = (ctx: CanvasRenderingContext2D, timestamp: number) => {
-      const levelIndex = hudState.levelIndex;
+      // FIX: Use ref for immediate value to prevent frame lag on level switch
+      const levelIndex = currentLevelIndexRef.current;
       const level = LEVELS[levelIndex];
       const logicalWidth = logicalWidthRef.current;
       const { scale, dpr } = dimensions;
@@ -814,6 +865,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       
       drawBgClouds(ctx);
       
+      // Draw falling snow particles
+      drawSnowParticles(ctx, logicalWidth, level.weatherType, level.weatherIntensity);
+
       // --- World Transform & Shake ---
       ctx.save();
       const dx = (Math.random() - 0.5) * shakeRef.current;
@@ -850,8 +904,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       particlesRef.current = particlesRef.current.filter(p => p.life > 0);
 
       // --- Weather Effects ---
+      // Dynamic Intensity based on progress
+      let currentIntensity = level.weatherIntensity;
+      if (gameMode === GameMode.STORY && level.weatherIntensity > 0) {
+          const prog = distanceRef.current / VICTORY_DISTANCE;
+          currentIntensity = level.weatherIntensity * (1 + prog * 0.8);
+      }
+
       if (level.weatherType === 'SNOWSTORM' || level.weatherType === 'WIND_CORRIDOR') {
-          drawBlizzard(ctx, timestamp, level.weatherIntensity, logicalWidth);
+          drawBlizzard(ctx, timestamp, currentIntensity, logicalWidth);
       }
       if (level.weatherType === 'WIND_CORRIDOR') {
           drawWindLines(ctx, timestamp, logicalWidth);
@@ -1027,6 +1088,38 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         ctx.fill();
         ctx.restore();
     });
+  };
+  
+  const drawSnowParticles = (ctx: CanvasRenderingContext2D, width: number, weatherType: string, intensity: number) => {
+      // Only draw if necessary
+      if (weatherType === 'CLEAR') return;
+      
+      const multiplier = weatherType === 'SNOWSTORM' ? 2 : (weatherType === 'TURBULENCE' ? 1.5 : 1);
+      const effectiveIntensity = Math.max(1, intensity * multiplier);
+      
+      ctx.fillStyle = "white";
+      snowParticlesRef.current.forEach(p => {
+          // Update position
+          p.x += p.vx * effectiveIntensity;
+          p.y += p.vy * effectiveIntensity;
+          
+          if (p.y > CANVAS_HEIGHT) {
+              p.y = -10;
+              p.x = Math.random() * width;
+          }
+          if (p.x > width) {
+              p.x = 0;
+          } else if (p.x < 0) {
+              p.x = width;
+          }
+          
+          // Draw
+          ctx.globalAlpha = 0.6;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+      });
+      ctx.globalAlpha = 1.0;
   };
 
   const drawMountainLayer = (
