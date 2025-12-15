@@ -686,7 +686,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               soundManager.playCollectWish();
               createParticles(letter.x, letter.y, ParticleType.SPARKLE, 15, '#fbbf24');
               createParticles(letter.x, letter.y, ParticleType.GLOW, 5, 'gold');
-              routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 10);
+              routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 5);
               wishesCollectedCountRef.current += 1;
               activeWishRef.current = { message: letter.message, variant: letter.variant };
               setTimeout(() => { if (activeWishRef.current?.message === letter.message) activeWishRef.current = null; }, 4000);
@@ -878,6 +878,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
   const applyPowerup = (type: PowerupType) => {
     const player = playerRef.current;
+    
+    // Apply 10% stability boost for any collected gift/powerup
+    routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 10);
+
     switch (type) {
       case PowerupType.SPEED: player.speedTimer = 7.0; break;
       case PowerupType.SNOWBALLS: player.snowballs += 5; break;
@@ -890,7 +894,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         player.healingTimer = 5.0; 
         player.stamina = MAX_STAMINA;
         isExhaustedRef.current = false;
-        routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 25);
         break;
       case PowerupType.LIFE: if (player.lives < 3) player.lives++; soundManager.playHeal(); break;
     }
