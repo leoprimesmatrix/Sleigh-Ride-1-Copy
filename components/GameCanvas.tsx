@@ -57,7 +57,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const [cinematicMode, setCinematicMode] = useState(false);
   
   // Responsive Dimensions State
-  const [dimensions, setDimensions] = useState({ w: 1200, h: 600, scale: 1 });
+  const [dimensions, setDimensions] = useState({ w: 1200, h: 600, scale: 1, dpr: 1 });
   const logicalWidthRef = useRef(1200);
 
   const playerRef = useRef<Player>({
@@ -145,12 +145,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     const handleResize = () => {
         const w = window.innerWidth;
         const h = window.innerHeight;
+        const dpr = window.devicePixelRatio || 1;
         // Calculate scale to fit vertical height (600px logical height)
         const scale = h / CANVAS_HEIGHT;
         // Logical width increases based on aspect ratio
         const logicalW = w / scale;
         
-        setDimensions({ w, h, scale });
+        setDimensions({ w, h, scale, dpr });
         logicalWidthRef.current = logicalW;
     };
     
@@ -307,8 +308,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       wasOnGroundRef.current = false;
       lastLevelIndexRef.current = -1;
       
-      // Force Regenerate Terrain based on start level (Isolation Fix)
-      // This ensures we don't see leftovers from previous levels
       const currentLogicalWidth = logicalWidthRef.current;
       bgLayersRef.current[0].points = generateTerrain(250, 100, currentLogicalWidth); 
       bgLayersRef.current[1].points = generateTerrain(150, 60, currentLogicalWidth);  
@@ -745,11 +744,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const levelIndex = hudState.levelIndex;
       const level = LEVELS[levelIndex];
       const logicalWidth = logicalWidthRef.current;
+      const { scale, dpr } = dimensions;
 
-      // Clear & Setup Scaling
+      // Clear & Setup Scaling with High DPI support
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       ctx.save();
-      ctx.scale(dimensions.scale, dimensions.scale);
+      ctx.scale(scale * dpr, scale * dpr);
 
       // --- Background Rendering ---
       const gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
@@ -757,6 +757,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       gradient.addColorStop(1, level.backgroundGradient[1]);
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, logicalWidth, CANVAS_HEIGHT);
+      
+      // Aurora Effect for specific levels
+      if (level.terrainType === 'MOUNTAINS' || level.terrainType === 'SPIKES') {
+         drawAurora(ctx, timestamp, logicalWidth, level.ambientLight);
+      }
 
       drawStars(ctx, timestamp);
       drawMoon(ctx, logicalWidth);
@@ -934,6 +939,31 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
      ctx.beginPath(); ctx.arc(width - 150, 100, 60, 0, Math.PI*2); ctx.fill();
      ctx.restore();
   }
+  
+  const drawAurora = (ctx: CanvasRenderingContext2D, timestamp: number, width: number, ambientColor: string) => {
+      ctx.save();
+      const time = timestamp * 0.0005;
+      const gradient = ctx.createLinearGradient(0, 0, width, 0);
+      gradient.addColorStop(0, "rgba(0,0,0,0)");
+      gradient.addColorStop(0.5, ambientColor.replace('0.15', '0.3').replace('0.2', '0.4')); // Use ambient color for theme
+      gradient.addColorStop(1, "rgba(0,0,0,0)");
+      
+      ctx.fillStyle = gradient;
+      ctx.globalCompositeOperation = "screen";
+      ctx.filter = "blur(20px)";
+      ctx.globalAlpha = 0.5;
+      
+      ctx.beginPath();
+      ctx.moveTo(0, CANVAS_HEIGHT / 2);
+      for (let x = 0; x <= width; x += 50) {
+          const y = Math.sin(x * 0.005 + time) * 50 + Math.sin(x * 0.01 - time * 2) * 30 + (CANVAS_HEIGHT / 3);
+          ctx.lineTo(x, y);
+      }
+      ctx.lineTo(width, 0);
+      ctx.lineTo(0, 0);
+      ctx.fill();
+      ctx.restore();
+  };
 
   const drawStars = (ctx: CanvasRenderingContext2D, timestamp: number) => {
     ctx.fillStyle = "white";
@@ -990,7 +1020,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
       // Decoration: Snow Caps or Spikes
       if (!isForeground) {
-          ctx.fillStyle = "rgba(255,255,255,0.1)";
+          ctx.fillStyle = "rgba(255,255,255,0.15)";
           ctx.beginPath();
           for (let i = 0; i < layer.points.length - 1; i++) {
               const x = (i * segmentWidth) + layer.offset; 
@@ -1004,9 +1034,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
                  ctx.fill();
               }
               else if (type === 'MOUNTAINS' && layer.points[i] > 100) { 
+                 // Snowcap
                  ctx.moveTo(x, y);
-                 ctx.lineTo(x + 10, y + 20);
-                 ctx.lineTo(x - 10, y + 20);
+                 ctx.lineTo(x + 15, y + 30);
+                 ctx.bezierCurveTo(x, y + 40, x - 5, y + 35, x - 15, y + 30);
                  ctx.fill();
               }
           }
@@ -1029,14 +1060,28 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           const x = block.x + layer.offset;
           if (x > -100 && x < width) {
              const y = baseY - block.h;
+             // Main Building
              ctx.fillRect(x, y, block.w, block.h);
              
+             // Antenna / Spire
+             if (block.h > 150) {
+                 ctx.fillRect(x + block.w/2 - 2, y - 20, 4, 20);
+                 if (Math.sin(timestamp / 200 + x) > 0.8) {
+                    ctx.fillStyle = "red";
+                    ctx.beginPath(); ctx.arc(x + block.w/2, y - 22, 2, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = color;
+                 }
+             }
+
              // Windows
              if (!isForeground) {
-                 ctx.fillStyle = Math.sin(timestamp/500 + x) > 0 ? "rgba(255, 255, 100, 0.2)" : "rgba(255, 255, 255, 0.1)";
-                 for(let wx = x + 5; wx < x + block.w - 5; wx += 10) {
-                     for(let wy = y + 10; wy < baseY - 10; wy += 20) {
-                         if (Math.random() > 0.8) ctx.fillRect(wx, wy, 4, 8);
+                 ctx.fillStyle = Math.sin(timestamp/500 + x) > 0 ? "rgba(255, 255, 100, 0.4)" : "rgba(255, 255, 255, 0.1)";
+                 const winSize = 4;
+                 const gap = 8;
+                 for(let wx = x + gap; wx < x + block.w - gap; wx += gap + winSize) {
+                     for(let wy = y + 15; wy < baseY - 10; wy += gap + winSize) {
+                         // Random lights
+                         if ((wx * wy) % 7 !== 0) ctx.fillRect(wx, wy, winSize, winSize * 1.5);
                      }
                  }
                  ctx.fillStyle = color; // Reset
@@ -1050,57 +1095,96 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     ctx.save(); 
     ctx.translate(player.x + player.width/2, player.y + player.height/2); 
     ctx.rotate(player.angle);
-    const scale = 0.8;
+    const scale = 0.85;
     ctx.scale(scale, scale);
 
     // --- REINDEER (Front) ---
     const droop = isExhaustedRef.current ? 10 : 0;
-    const legCycle = Math.sin(timestamp / 50) * 10;
+    const legCycle = Math.sin(timestamp / 80) * 15;
     
+    // Body
     ctx.fillStyle = "#8d6e63"; 
-    ctx.beginPath(); ctx.ellipse(40, 0 + droop, 20, 10, 0, 0, Math.PI*2); ctx.fill(); 
+    ctx.beginPath(); ctx.ellipse(40, 0 + droop, 22, 12, 0, 0, Math.PI*2); ctx.fill(); 
     
-    ctx.lineWidth = 3; ctx.strokeStyle = "#5d4037";
-    ctx.beginPath(); ctx.moveTo(30, 5 + droop); ctx.lineTo(30 - legCycle, 20 + droop); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(50, 5 + droop); ctx.lineTo(50 + legCycle, 20 + droop); ctx.stroke();
+    // Legs (Animated)
+    ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.strokeStyle = "#5d4037";
+    // Front Legs
+    ctx.beginPath(); ctx.moveTo(50, 5 + droop); ctx.lineTo(55 + legCycle, 25 + droop); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(50, 5 + droop); ctx.lineTo(55 - legCycle, 25 + droop); ctx.stroke();
+    // Back Legs
+    ctx.beginPath(); ctx.moveTo(30, 5 + droop); ctx.lineTo(25 + legCycle, 25 + droop); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(30, 5 + droop); ctx.lineTo(25 - legCycle, 25 + droop); ctx.stroke();
 
-    ctx.beginPath(); ctx.ellipse(60, -10 + droop, 10, 8, -0.2, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#ef4444"; ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.arc(68, -10 + droop, 3, 0, Math.PI*2); ctx.fill();
+    // Head & Neck
+    ctx.beginPath(); ctx.ellipse(62, -12 + droop, 12, 10, -0.3, 0, Math.PI*2); ctx.fill();
+    // Antlers
+    ctx.lineWidth = 2; ctx.strokeStyle = "#4e342e";
+    ctx.beginPath(); ctx.moveTo(60, -20 + droop); ctx.lineTo(65, -35 + droop); ctx.lineTo(70, -40 + droop); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(60, -20 + droop); ctx.lineTo(55, -30 + droop); ctx.stroke();
+    
+    // Nose (Glowing Red)
+    ctx.fillStyle = "#ef4444"; ctx.shadowColor = "#ef4444"; ctx.shadowBlur = 15;
+    ctx.beginPath(); ctx.arc(72, -10 + droop, 4, 0, Math.PI*2); ctx.fill();
     ctx.shadowBlur = 0;
     
+    // Eye
+    ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(65, -15 + droop, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "black"; ctx.beginPath(); ctx.arc(66, -15 + droop, 1, 0, Math.PI*2); ctx.fill();
+
+    // Sweat drops if exhausted
     if (isExhaustedRef.current) {
         const dropY = (timestamp % 500) / 10;
         ctx.fillStyle = "#38bdf8"; 
-        ctx.beginPath(); ctx.arc(55, -20 + dropY, 3, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(50, -20 + dropY, 3, 0, Math.PI*2); ctx.fill();
     }
 
-    ctx.strokeStyle = "#fcd34d"; ctx.lineWidth = 1;
+    // Harness
+    ctx.strokeStyle = "#fcd34d"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(40, 0 + droop); ctx.lineTo(0, 0); ctx.stroke();
 
     // --- SLEIGH (Back) ---
-    ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 3; 
-    ctx.beginPath(); ctx.moveTo(-40, 20); ctx.lineTo(10, 20); ctx.bezierCurveTo(20, 15, 20, 5, 10, 5); ctx.stroke();
+    // Runners
+    ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 4; 
+    ctx.beginPath(); ctx.moveTo(-45, 25); ctx.lineTo(15, 25); ctx.bezierCurveTo(25, 20, 25, 5, 15, 5); ctx.stroke();
+    // Sleigh Body
     const grad = ctx.createLinearGradient(0, -20, 0, 20); grad.addColorStop(0, "#b91c1c"); grad.addColorStop(1, "#7f1d1d");
     ctx.fillStyle = grad;
     ctx.beginPath(); 
-    ctx.moveTo(-45, 15); 
-    ctx.bezierCurveTo(-35, 25, 5, 25, 15, 15);
-    ctx.lineTo(15, -5); 
-    ctx.lineTo(-45, -5); 
+    ctx.moveTo(-50, 15); 
+    ctx.bezierCurveTo(-40, 30, 5, 30, 15, 15);
+    ctx.lineTo(15, -10); 
+    ctx.lineTo(-50, -10); 
     ctx.fill();
     
-    ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(-45, 0); ctx.lineTo(15, 0); ctx.stroke();
+    // Gold Trim
+    ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-50, -5); ctx.lineTo(15, -5); ctx.stroke();
 
-    ctx.fillStyle = "#fca5a5"; ctx.beginPath(); ctx.arc(-15, -10, 8, 0, Math.PI*2); ctx.fill(); 
-    ctx.fillStyle = "#ef4444"; ctx.beginPath(); ctx.moveTo(-23, -12); ctx.lineTo(-7, -12); ctx.lineTo(-15, -25); ctx.fill(); 
-    ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(-15, -25, 3, 0, Math.PI*2); ctx.fill(); 
+    // Presents in Sleigh
+    ctx.fillStyle = "#16a34a"; ctx.fillRect(-35, -20, 10, 10);
+    ctx.fillStyle = "#2563eb"; ctx.fillRect(-25, -25, 12, 15);
+    ctx.strokeStyle = "#facc15"; ctx.lineWidth = 1; ctx.strokeRect(-25, -25, 12, 15);
 
+    // Santa
+    // Body
+    ctx.fillStyle = "#ef4444"; ctx.beginPath(); ctx.ellipse(-10, -10, 12, 15, 0, 0, Math.PI*2); ctx.fill();
+    // Head
+    ctx.fillStyle = "#fca5a5"; ctx.beginPath(); ctx.arc(-10, -25, 9, 0, Math.PI*2); ctx.fill(); 
+    // Beard
+    ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(-10, -22, 10, 0, Math.PI); ctx.fill();
+    // Hat
+    ctx.fillStyle = "#ef4444"; ctx.beginPath(); ctx.moveTo(-20, -28); ctx.lineTo(-10, -45); ctx.lineTo(2, -28); ctx.fill();
+    ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(-10, -45, 3, 0, Math.PI*2); ctx.fill(); // Pom
+    ctx.beginPath(); ctx.ellipse(-10, -28, 11, 3, 0, 0, Math.PI*2); ctx.fill(); // Brim
+    // Scarf
+    ctx.strokeStyle = "#16a34a"; ctx.lineWidth = 3; 
+    ctx.beginPath(); ctx.moveTo(-5, -18); ctx.quadraticCurveTo(-15, -15, -25 + Math.sin(timestamp/100)*3, -18); ctx.stroke();
+
+    // Boost Aura
     if (player.speedTimer > 0) {
         ctx.globalCompositeOperation = 'screen';
-        ctx.fillStyle = "rgba(255, 200, 0, 0.3)";
-        ctx.beginPath(); ctx.ellipse(0, 0, 70, 40, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "rgba(255, 200, 0, 0.4)";
+        ctx.beginPath(); ctx.ellipse(10, 0, 90, 50, 0, 0, Math.PI*2); ctx.fill();
         ctx.globalCompositeOperation = 'source-over';
     }
 
@@ -1112,44 +1196,94 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     
     if (obs.type === 'TREE') {
         const sway = Math.sin(timestamp / 400 + obs.id) * 0.05; ctx.rotate(sway);
-        ctx.fillStyle = "#451a03"; ctx.fillRect(obs.width/2 - 5, obs.height - 15, 10, 15);
-        const layers = 3; const layerHeight = (obs.height - 10) / layers;
+        // Trunk
+        ctx.fillStyle = "#3f2c22"; ctx.fillRect(obs.width/2 - 6, obs.height - 15, 12, 15);
+        
+        // Layers
+        const layers = 3;
+        const layerH = (obs.height - 15) / layers;
         for(let i=0; i<layers; i++) {
-            const width = obs.width - (i * 12); 
-            const y = (layers - 1 - i) * layerHeight;
-            const grad = ctx.createLinearGradient(0, y - layerHeight, 0, y + layerHeight);
-            grad.addColorStop(0, "#4ade80"); grad.addColorStop(1, "#166534");
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.moveTo(obs.width/2, y - layerHeight);
-            ctx.lineTo(obs.width/2 + width/2, y + layerHeight);
-            ctx.lineTo(obs.width/2 - width/2, y + layerHeight);
-            ctx.fill();
-            
-            ctx.fillStyle = "white";
-            ctx.beginPath();
-            ctx.moveTo(obs.width/2, y - layerHeight);
-            ctx.lineTo(obs.width/2 + 5, y - layerHeight + 5);
-            ctx.lineTo(obs.width/2 - 5, y - layerHeight + 5);
-            ctx.fill();
+             const y = (layers - 1 - i) * layerH;
+             const w = obs.width - (i * 10);
+             
+             // Green Foliage
+             const grad = ctx.createLinearGradient(0, y-layerH, 0, y+layerH);
+             grad.addColorStop(0, "#86efac");
+             grad.addColorStop(1, "#15803d");
+             ctx.fillStyle = grad;
+             
+             ctx.beginPath();
+             ctx.moveTo(obs.width/2, y - layerH - 5);
+             ctx.lineTo(obs.width/2 + w/2, y + layerH);
+             ctx.lineTo(obs.width/2 - w/2, y + layerH);
+             ctx.fill();
+
+             // Snow
+             ctx.fillStyle = "white";
+             ctx.beginPath();
+             ctx.moveTo(obs.width/2, y - layerH - 5);
+             ctx.lineTo(obs.width/2 + 8, y - layerH + 8);
+             ctx.bezierCurveTo(obs.width/2, y - layerH + 12, obs.width/2 - 5, y - layerH + 12, obs.width/2 - 8, y - layerH + 8);
+             ctx.fill();
         }
     } 
     else if (obs.type === 'BUILDING') {
-        ctx.fillStyle = "#0f172a"; ctx.fillRect(0,0, obs.width, obs.height);
-        ctx.fillStyle = "#1e293b"; ctx.beginPath(); ctx.moveTo(obs.width, 0); ctx.lineTo(obs.width+10, 10); ctx.lineTo(obs.width+10, obs.height+10); ctx.lineTo(obs.width, obs.height); ctx.fill();
+        // Dark Building Body
+        ctx.fillStyle = "#0f172a"; 
+        ctx.fillRect(0,0, obs.width, obs.height);
+        
+        // Depth side
+        ctx.fillStyle = "#1e293b"; 
+        ctx.beginPath(); ctx.moveTo(obs.width, 0); ctx.lineTo(obs.width+15, 15); ctx.lineTo(obs.width+15, obs.height+15); ctx.lineTo(obs.width, obs.height); ctx.fill();
+        
+        // Windows grid
         ctx.fillStyle = "#fbbf24"; ctx.shadowColor = "#f59e0b";
-        for(let i=10; i<obs.width-10; i+=20) {
-            for(let j=10; j<obs.height-10; j+=30) {
-                if (Math.random() > 0.5) { 
-                    ctx.shadowBlur = 5;
-                    ctx.fillRect(i, j, 10, 15);
-                    ctx.shadowBlur = 0;
-                } else {
-                    ctx.fillStyle = "#334155"; ctx.fillRect(i, j, 10, 15); ctx.fillStyle = "#fbbf24";
-                }
+        const rows = Math.floor(obs.height / 30);
+        const cols = Math.floor(obs.width / 20);
+        
+        for(let r=0; r<rows; r++) {
+            for(let c=0; c<cols; c++) {
+                 // Randomize lit windows based on obs ID to keep it consistent per frame
+                 const isLit = Math.sin(obs.id * r * c) > 0.3; 
+                 if (isLit) {
+                     ctx.shadowBlur = 5;
+                     ctx.fillRect(10 + c*20, 10 + r*30, 12, 18);
+                     ctx.shadowBlur = 0;
+                 } else {
+                     ctx.fillStyle = "#334155";
+                     ctx.fillRect(10 + c*20, 10 + r*30, 12, 18);
+                     ctx.fillStyle = "#fbbf24";
+                 }
             }
         }
     } 
+    else if (obs.type === 'SNOWMAN') {
+        // Body
+        const grad = ctx.createRadialGradient(obs.width/2, obs.height, 5, obs.width/2, obs.height/2, obs.width/2);
+        grad.addColorStop(0, "white"); grad.addColorStop(1, "#cbd5e1");
+        ctx.fillStyle = grad;
+        
+        // Bottom
+        ctx.beginPath(); ctx.arc(obs.width/2, obs.height - 25, 25, 0, Math.PI*2); ctx.fill();
+        // Middle
+        ctx.beginPath(); ctx.arc(obs.width/2, obs.height - 60, 20, 0, Math.PI*2); ctx.fill();
+        // Head
+        ctx.beginPath(); ctx.arc(obs.width/2, obs.height - 90, 15, 0, Math.PI*2); ctx.fill();
+        
+        // Hat
+        ctx.fillStyle = "#1e293b";
+        ctx.fillRect(obs.width/2 - 12, obs.height - 105, 24, 4); // Brim
+        ctx.fillRect(obs.width/2 - 8, obs.height - 120, 16, 15); // Top
+        
+        // Carrot
+        ctx.fillStyle = "orange";
+        ctx.beginPath(); ctx.moveTo(obs.width/2, obs.height - 90); ctx.lineTo(obs.width/2 - 15, obs.height - 88); ctx.lineTo(obs.width/2, obs.height - 86); ctx.fill();
+        
+        // Arms
+        ctx.strokeStyle = "#451a03"; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(obs.width/2 + 15, obs.height - 60); ctx.lineTo(obs.width/2 + 35, obs.height - 70); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(obs.width/2 - 15, obs.height - 60); ctx.lineTo(obs.width/2 - 35, obs.height - 70); ctx.stroke();
+    }
     else if (obs.type === 'ICE_SPIKE') {
         const grad = ctx.createLinearGradient(0,0,0, obs.height);
         grad.addColorStop(0, "rgba(255,255,255,0.9)"); grad.addColorStop(1, "rgba(165, 243, 252, 0.4)");
@@ -1158,25 +1292,30 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         ctx.strokeStyle = "white"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(obs.width/2, 0); ctx.lineTo(obs.width/2, obs.height); ctx.stroke();
     }
     else if (obs.type === 'DARK_GARLAND') {
-        ctx.strokeStyle = "#4b5563"; ctx.lineWidth = 3;
+        ctx.strokeStyle = "#374151"; ctx.lineWidth = 4;
         ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(obs.width/2, obs.height, obs.width, 0); ctx.stroke();
-        for(let i=0.2; i<0.9; i+=0.2) {
+        for(let i=0.15; i<0.9; i+=0.15) {
              const x = obs.width * i; const y = obs.height * 0.8;
-             ctx.fillStyle = Math.random() > 0.9 ? "red" : "#1f2937";
-             ctx.beginPath(); ctx.arc(x, y + (i===0.5 ? 10 : 0), 4, 0, Math.PI*2); ctx.fill();
+             const isBroken = Math.random() > 0.5;
+             ctx.fillStyle = isBroken ? "#1f2937" : (Math.random() > 0.5 ? "red" : "gray");
+             ctx.beginPath(); ctx.arc(x, y + (i===0.45 ? 10 : 0), 5, 0, Math.PI*2); ctx.fill();
+             if (!isBroken) { ctx.fillStyle="rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI*2); ctx.fill(); }
         }
     }
     else if (obs.type === 'CLOUD') {
          ctx.fillStyle = "rgba(255,255,255, 0.9)"; 
-         ctx.beginPath(); ctx.arc(20, 20, 20, 0, Math.PI*2); ctx.arc(50, 20, 25, 0, Math.PI*2); ctx.arc(80, 20, 15, 0, Math.PI*2); ctx.fill();
-         ctx.fillStyle = "rgba(200,200,200, 0.5)";
-         ctx.beginPath(); ctx.arc(50, 20, 20, 0, Math.PI*2); ctx.fill();
+         ctx.beginPath(); ctx.arc(20, 20, 25, 0, Math.PI*2); ctx.arc(50, 20, 30, 0, Math.PI*2); ctx.arc(80, 20, 20, 0, Math.PI*2); ctx.fill();
+         ctx.fillStyle = "rgba(200,200,200, 0.3)";
+         ctx.beginPath(); ctx.arc(50, 25, 25, 0, Math.PI*2); ctx.fill();
     }
     else if (obs.type === 'BIRD') {
-        const flap = Math.sin(timestamp / 100) * 10;
-        ctx.fillStyle = "#1e293b";
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(10, -10 + flap, 20, 0); ctx.quadraticCurveTo(30, -10 + flap, 40, 0);
-        ctx.lineTo(20, 10); ctx.fill();
+        const flap = Math.sin(timestamp / 80 + obs.id) * 15;
+        ctx.fillStyle = "#1e293b"; // Dark silhouette
+        ctx.beginPath(); 
+        // Body
+        ctx.ellipse(20, 10, 15, 8, 0, 0, Math.PI*2); ctx.fill();
+        // Wings
+        ctx.beginPath(); ctx.moveTo(20, 10); ctx.lineTo(10, -10 + flap); ctx.lineTo(30, -10 + flap); ctx.fill();
     }
     ctx.restore();
   };
@@ -1187,21 +1326,38 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       ctx.scale(scale, scale);
       
       const color = POWERUP_COLORS[pup.type];
-      const pulse = Math.abs(Math.sin(timestamp / 300));
-      ctx.fillStyle = color;
-      ctx.globalAlpha = 0.2 * pulse;
-      ctx.beginPath(); ctx.arc(pup.width/2, pup.height/2, 30, 0, Math.PI*2); ctx.fill();
-      ctx.globalAlpha = 1.0;
 
+      // Draw Gift Box
       ctx.fillStyle = color;
-      ctx.shadowColor = color; ctx.shadowBlur = 15 + 10 * pulse;
-      ctx.beginPath(); ctx.arc(pup.width/2, pup.height/2, 18, 0, Math.PI*2); ctx.fill();
+      ctx.shadowColor = color; ctx.shadowBlur = 20;
+      ctx.fillRect(0, 0, pup.width, pup.height);
+      ctx.shadowBlur = 0;
+
+      // Ribbon
+      ctx.fillStyle = "white";
+      ctx.fillRect(pup.width/2 - 5, 0, 10, pup.height); // Vertical
+      ctx.fillRect(0, pup.height/2 - 5, pup.width, 10); // Horizontal
+
+      // Bow
+      ctx.beginPath();
+      ctx.moveTo(pup.width/2, 0);
+      ctx.bezierCurveTo(pup.width/2 - 10, -10, pup.width/2 - 20, 0, pup.width/2, 5);
+      ctx.bezierCurveTo(pup.width/2 + 20, 0, pup.width/2 + 10, -10, pup.width/2, 0);
+      ctx.fill();
+
+      // Icon Overlay (Symbolic)
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.font = "bold 20px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      let symbol = "?";
+      if (pup.type === PowerupType.SPEED) symbol = "⚡";
+      if (pup.type === PowerupType.HEALING) symbol = "+";
+      if (pup.type === PowerupType.SNOWBALLS) symbol = "❄";
+      if (pup.type === PowerupType.BLAST) symbol = "★";
       
-      ctx.fillStyle = "white"; ctx.shadowBlur = 0;
-      ctx.beginPath(); ctx.arc(pup.width/2, pup.height/2, 8, 0, Math.PI*2); ctx.fill();
-      
-      ctx.strokeStyle = "white"; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(pup.width/2, pup.height/2, 22, 0, Math.PI*2); ctx.stroke();
+      ctx.fillText(symbol, pup.width/2, pup.height/2);
+
       ctx.restore();
   };
 
@@ -1263,8 +1419,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     <div className="relative w-full h-full bg-black overflow-hidden group">
       <canvas 
         ref={canvasRef} 
-        width={dimensions.w} 
-        height={dimensions.h} 
+        width={dimensions.w * dimensions.dpr} 
+        height={dimensions.h * dimensions.dpr} 
+        style={{ width: dimensions.w, height: dimensions.h }}
         className="w-full h-full block" 
       />
       {gameState !== GameState.INTRO && !cinematicMode && !isEndingSequenceRef.current && (
