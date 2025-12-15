@@ -66,8 +66,8 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
   };
 
   // Calculations for bars
-  const staminaPercent = (stamina / MAX_STAMINA) * 100;
-  const stabilityPercent = (stability / INITIAL_STABILITY) * 100;
+  const staminaPercent = Math.min(100, (stamina / MAX_STAMINA) * 100);
+  const stabilityPercent = Math.min(100, (stability / INITIAL_STABILITY) * 100);
   const isStabilityLow = stabilityPercent < 30;
   
   return (
@@ -113,7 +113,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
       {activeDialogue && (
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent pb-8 pt-12 flex justify-center animate-slide-up z-20">
              <div className="flex flex-col items-center text-center max-w-3xl px-4">
-                <h4 className={`font-bold uppercase text-sm tracking-[0.2em] mb-1 drop-shadow-md ${activeDialogue.speaker === 'Santa' ? 'text-red-400' : (activeDialogue.speaker === 'Control' ? 'text-blue-400' : 'text-yellow-400')}`}>
+                <h4 className={`font-bold uppercase text-xs tracking-[0.2em] mb-1 drop-shadow-md py-1 px-3 rounded-full bg-black/40 border border-white/10 ${activeDialogue.speaker === 'Santa' ? 'text-red-400' : (activeDialogue.speaker === 'Control' ? 'text-blue-400' : 'text-yellow-400')}`}>
                     {activeDialogue.speaker}
                 </h4>
                 <p className="text-2xl text-white font-mono tracking-wide leading-snug drop-shadow-lg text-shadow-black">
@@ -128,92 +128,112 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
         
         {/* LEFT: Stats */}
         <div className="flex flex-col gap-3 animate-slide-in-left">
-          {/* Lives */}
-          <div className="flex items-center gap-1 p-2 bg-slate-900/40 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg w-fit">
-            {[1, 2, 3].map((i) => (
-                <div key={i} className="relative w-8 h-8">
-                  {i <= lives ? (
-                    <div className="text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)] animate-pulse-slow">
-                       <Heart fill="currentColor" size={32} />
+          {/* Lives & Ammo Cluster */}
+          <div className="flex items-center gap-3">
+             <div className="flex items-center gap-1 p-2 bg-slate-900/40 backdrop-blur-md rounded-xl border border-white/5 shadow-lg">
+                {[1, 2, 3].map((i) => (
+                    <div key={i} className="relative w-6 h-6">
+                    {i <= lives ? (
+                        <div className="text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse-slow">
+                        <Heart fill="currentColor" size={24} />
+                        </div>
+                    ) : (
+                        <div className="text-slate-600 opacity-50 scale-90 grayscale"><Heart fill="currentColor" size={24} /></div>
+                    )}
                     </div>
-                  ) : (
-                     <div className="text-slate-600 opacity-50 scale-90 grayscale"><Heart fill="currentColor" size={32} /></div>
-                  )}
-                </div>
-            ))}
+                ))}
+             </div>
+             
+             <div className="flex items-center gap-2 bg-slate-900/40 backdrop-blur-md px-3 py-2 rounded-xl border border-white/5">
+                <Snowflake size={16} className="text-cyan-300" />
+                <span className="font-bold text-cyan-100 tabular-nums">{snowballs}</span>
+             </div>
           </div>
 
-          {/* Route Stability Meter (New) */}
-          <div className="bg-slate-900/60 backdrop-blur-md p-3 rounded-xl border border-slate-700 shadow-lg w-64">
-             <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-                    <Activity size={14} className={isStabilityLow ? "text-red-500 animate-pulse" : "text-green-500"} />
+          {/* Route Stability Meter */}
+          <div className="bg-slate-900/60 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-700/50 shadow-lg w-56 flex flex-col gap-1">
+             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="flex items-center gap-1">
+                    <Activity size={10} className={isStabilityLow ? "text-red-500 animate-pulse" : "text-green-500"} />
                     Route Stability
                 </div>
-                <span className={`text-xs font-mono ${isStabilityLow ? "text-red-400" : "text-green-400"}`}>{Math.floor(stability)}%</span>
+                <span className={isStabilityLow ? "text-red-400" : "text-green-400"}>{Math.floor(stability)}%</span>
              </div>
-             <div className="h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-600">
+             <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                  <div 
-                    className={`h-full transition-all duration-300 ${isStabilityLow ? 'bg-red-600 animate-pulse' : 'bg-gradient-to-r from-green-600 to-green-400'}`}
+                    className={`h-full transition-all duration-300 ${isStabilityLow ? 'bg-red-500 animate-pulse shadow-[0_0_10px_red]' : 'bg-green-500'}`}
                     style={{ width: `${stabilityPercent}%` }}
                  />
              </div>
           </div>
 
-          {/* Reindeer Stamina Meter (New) */}
-          <div className="bg-slate-900/60 backdrop-blur-md p-3 rounded-xl border border-slate-700 shadow-lg w-64">
-             <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-                    <Battery size={14} className="text-yellow-500" />
-                    Reindeer Stamina
+          {/* Reindeer Stamina Meter */}
+          <div className="bg-slate-900/60 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-700/50 shadow-lg w-56 flex flex-col gap-1">
+             <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="flex items-center gap-1">
+                    <Battery size={10} className="text-yellow-500" />
+                    Stamina
                 </div>
              </div>
-             <div className="h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-600">
+             <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                  <div 
-                    className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 transition-all duration-100"
+                    className="h-full bg-yellow-400 transition-all duration-100"
                     style={{ width: `${staminaPercent}%` }}
                  />
              </div>
           </div>
         </div>
 
-        {/* CENTER: Level & Time */}
+        {/* CENTER: Mission Info */}
         <div className="flex flex-col items-center animate-fade-in-down">
-          <div className="bg-slate-900/60 backdrop-blur-md px-4 py-2 rounded-lg border border-slate-700 text-yellow-300 font-mono text-xl tracking-widest shadow-lg">
+          <div className="bg-black/40 backdrop-blur-md px-4 py-1 rounded-full border border-white/5 text-yellow-300 font-mono text-xl tracking-widest shadow-lg mb-1">
              {formatTime(timeLeft)}
           </div>
-          <div className="mt-2 text-center">
-            <h2 className="text-white font-christmas text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,1)] tracking-wide text-stroke">
+          <div className="text-center">
+            <h2 className="text-white font-christmas text-2xl drop-shadow-md text-stroke tracking-wide opacity-90">
                 {currentLevelName}
             </h2>
           </div>
         </div>
 
-        {/* RIGHT: Active Powerups Status */}
-        <div className="flex flex-col gap-2 animate-slide-in-right items-end">
-             {/* Snowballs */}
-             <div className="flex items-center gap-3 bg-cyan-900/40 backdrop-blur-md px-4 py-2 rounded-full border border-cyan-500/30">
-                <Snowflake size={20} className="text-cyan-300" />
-                <span className="font-black text-xl text-cyan-100 tabular-nums">{snowballs}</span>
+        {/* RIGHT: Objectives & Buffs */}
+        <div className="flex flex-col gap-2 animate-slide-in-right items-end w-56">
+             <div className="bg-slate-900/60 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-700/50 shadow-lg w-full">
+                 <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    <span>Wishes Collected</span>
+                    <span className="text-amber-400">{wishesCollected} / {REQUIRED_WISHES}</span>
+                 </div>
+                 <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                     <div 
+                        className="h-full bg-amber-400 shadow-[0_0_10px_orange]"
+                        style={{ width: `${Math.min(100, (wishesCollected/REQUIRED_WISHES)*100)}%` }}
+                     />
+                 </div>
              </div>
 
              {/* Active Powerups Timer */}
              {activePowerups > 0 && (
-                 <div className="flex items-center gap-2 bg-yellow-900/40 backdrop-blur-md px-4 py-2 rounded-full border border-yellow-500/30 animate-pulse">
-                     <Zap size={20} className="text-yellow-300" />
-                     <span className="text-xs text-yellow-100 uppercase font-bold">Boost Active</span>
+                 <div className="flex items-center gap-2 bg-yellow-900/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-yellow-500/30 animate-pulse mt-2">
+                     <Zap size={14} className="text-yellow-300" />
+                     <span className="text-[10px] text-yellow-100 uppercase font-bold tracking-wider">Boost Active</span>
                  </div>
              )}
         </div>
       </div>
 
       {/* BOTTOM: Progress */}
-      <div className="w-full max-w-3xl mx-auto mb-12 animate-slide-up z-10 opacity-80 hover:opacity-100 transition-opacity">
-         <div className="h-3 bg-slate-800/80 rounded-full border border-slate-600/50 overflow-visible relative backdrop-blur-sm shadow-inner">
+      <div className="w-full max-w-4xl mx-auto mb-8 animate-slide-up z-10 opacity-90">
+         <div className="flex justify-between text-[10px] text-slate-400 font-mono mb-1 uppercase tracking-widest px-2">
+             <span>Start</span>
+             <span>Destination</span>
+         </div>
+         <div className="h-2 bg-slate-800/80 rounded-full border border-slate-600/30 overflow-hidden backdrop-blur-sm relative">
             <div 
-              className="h-full bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-600 bg-[length:50px_50px] animate-[shimmer_2s_linear_infinite] rounded-full shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all duration-200 ease-linear"
+              className="h-full bg-gradient-to-r from-blue-600 via-cyan-400 to-white/80 rounded-full shadow-[0_0_15px_rgba(34,211,238,0.5)] transition-all duration-200 ease-linear relative"
               style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-            />
+            >
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_5px_white]"></div>
+            </div>
          </div>
       </div>
     </div>

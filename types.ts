@@ -106,6 +106,8 @@ export interface LevelConfig {
   description: string;
   missionObjective: string;
   backgroundGradient: [string, string];
+  groundPalette: [string, string, string]; // Far, Mid, Near colors
+  terrainType: 'MOUNTAINS' | 'CITY' | 'SPIKES' | 'HILLS';
   obstacleSpeedMultiplier: number;
   spawnRateMultiplier: number;
   weatherIntensity: number;
@@ -114,7 +116,8 @@ export interface LevelConfig {
 }
 
 export interface BackgroundLayer {
-  points: number[];
+  points: number[]; // For mountains/hills
+  blocks: {x: number, w: number, h: number}[]; // For city
   color: string;
   speedModifier: number;
   offset: number;

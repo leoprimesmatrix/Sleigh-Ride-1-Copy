@@ -35,7 +35,9 @@ export const LEVELS: LevelConfig[] = [
     name: "The Buried Road",
     description: "Snowstorms have covered the supply route.",
     missionObjective: "Blast obstacles to clear the path.",
-    backgroundGradient: ['#1e293b', '#334155'], // Darker Slate
+    backgroundGradient: ['#1e293b', '#334155'], // Slate Sky
+    groundPalette: ['#475569', '#64748b', '#94a3b8'], // Icy Greys
+    terrainType: 'MOUNTAINS',
     obstacleSpeedMultiplier: 1.0,
     spawnRateMultiplier: 1.2,
     weatherIntensity: 1,
@@ -47,6 +49,8 @@ export const LEVELS: LevelConfig[] = [
     description: "The power grid has failed. Belief is dropping.",
     missionObjective: "Collect stabilizers to re-ignite the city.",
     backgroundGradient: ['#020617', '#172554'], // Midnight Blue
+    groundPalette: ['#0f172a', '#1e293b', '#334155'], // Dark Buildings
+    terrainType: 'CITY',
     obstacleSpeedMultiplier: 1.1,
     spawnRateMultiplier: 1.3,
     weatherIntensity: 0,
@@ -57,7 +61,9 @@ export const LEVELS: LevelConfig[] = [
     name: "Turbulent Skies",
     description: "Atmospheric instability detected.",
     missionObjective: "Maintain altitude. Watch Reindeer stamina.",
-    backgroundGradient: ['#0f172a', '#475569'],
+    backgroundGradient: ['#0f172a', '#475569'], // Stormy
+    groundPalette: ['#1e1b4b', '#312e81', '#4338ca'], // Deep Indigos
+    terrainType: 'HILLS',
     obstacleSpeedMultiplier: 1.3,
     spawnRateMultiplier: 0.9,
     weatherIntensity: 3,
@@ -65,10 +71,12 @@ export const LEVELS: LevelConfig[] = [
     stabilityDrainRate: 0.04
   },
   {
-    name: "The Split Path",
+    name: "The Glacial Spikes",
     description: "High winds ahead. Route integrity critical.",
     missionObjective: "Survive the wind corridor.",
-    backgroundGradient: ['#1e1b4b', '#312e81'], // Indigo Storm
+    backgroundGradient: ['#082f49', '#0ea5e9'], // Cyan/Blue
+    groundPalette: ['#164e63', '#155e75', '#0891b2'], // Sharp Ice
+    terrainType: 'SPIKES',
     obstacleSpeedMultiplier: 1.5,
     spawnRateMultiplier: 1.4,
     weatherIntensity: 5,
@@ -79,7 +87,9 @@ export const LEVELS: LevelConfig[] = [
     name: "Eye of the Storm",
     description: "The source of the anomaly.",
     missionObjective: "Deliver the final spark.",
-    backgroundGradient: ['#450a0a', '#7f1d1d'], // Red warning sky
+    backgroundGradient: ['#450a0a', '#991b1b'], // Red warning sky
+    groundPalette: ['#450a0a', '#7f1d1d', '#b91c1c'], // Red Tinted Ground
+    terrainType: 'MOUNTAINS',
     obstacleSpeedMultiplier: 1.2,
     spawnRateMultiplier: 1.0,
     weatherIntensity: 8,

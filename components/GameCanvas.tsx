@@ -45,7 +45,7 @@ import {
 } from '../constants.ts';
 import UIOverlay from './UIOverlay.tsx';
 import { soundManager } from '../audio.ts';
-import { Eye, EyeOff, Skull, Trophy, Camera, FastForward, Mail, BatteryWarning, Bug, ChevronsRight, Heart, Snowflake } from 'lucide-react';
+import { Bug, Eye, BatteryWarning, ChevronsRight, Heart, Snowflake } from 'lucide-react';
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -59,10 +59,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   
   const [debugMenuOpen, setDebugMenuOpen] = useState(false);
   const [cinematicMode, setCinematicMode] = useState(false);
-  const [promoMode, setPromoMode] = useState(false);
 
   const playerRef = useRef<Player>({
-    id: 0, x: 150, y: 300, width: 90, height: 40, markedForDeletion: false, // Widened hitbox for Sleigh+Reindeer
+    id: 0, x: 150, y: 300, width: 90, height: 40, markedForDeletion: false,
     vy: 0, lives: 3, snowballs: 0, isInvincible: false, invincibleTimer: 0,
     healingTimer: 0, speedTimer: 0, angle: 0,
     stamina: MAX_STAMINA, maxStamina: MAX_STAMINA
@@ -79,7 +78,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   
   // Game System Refs
   const routeStabilityRef = useRef(INITIAL_STABILITY);
-  const windForceRef = useRef({ x: 0, y: 0 });
   
   const starsRef = useRef<{x:number, y:number, size:number, phase:number}[]>([]);
   const bgCloudsRef = useRef<{x:number, y:number, speed:number, scale:number, opacity: number}[]>([]);
@@ -87,13 +85,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const pausedTimeRef = useRef(0); 
 
   const saturationRef = useRef(0.0);
-  const flickerTimerRef = useRef(0);
   const isLightsOutRef = useRef(false);
   const isEndingSequenceRef = useRef(false);
   const joyRideModeRef = useRef(false);
   const joyRideTimerRef = useRef(0);
   const masterGiftDroppedRef = useRef(false);
-  const villainLetterSpawnedRef = useRef(false);
+  const wasOnGroundRef = useRef(false);
 
   const collectedPowerupsRef = useRef<{ id: number; type: PowerupType }[]>([]);
   const wishesCollectedCountRef = useRef(0);
@@ -102,40 +99,57 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const endingMusicTriggeredRef = useRef(false);
   const triggeredLandmarksRef = useRef<Set<string>>(new Set());
   const triggeredLettersRef = useRef<Set<string>>(new Set());
+  const triggeredStoryMomentsRef = useRef<Set<string>>(new Set());
   
   const distanceRef = useRef(0);
   const scoreRef = useRef(0);
   const timeRef = useRef(TOTAL_GAME_TIME_SECONDS);
   const lastFrameTimeRef = useRef(0);
   const shakeRef = useRef(0);
-  const triggeredStoryMomentsRef = useRef<Set<string>>(new Set());
   const lastLevelIndexRef = useRef(-1);
-  const wasOnGroundRef = useRef(false);
   
   // Modified speed modifiers for better parallax depth
   const bgLayersRef = useRef<BackgroundLayer[]>([
-    { points: [], color: '', speedModifier: 0.05, offset: 0 }, // Distant Mountains - Moves very slow
-    { points: [], color: '', speedModifier: 0.2, offset: 0 }, // Mid Hills
-    { points: [], color: '', speedModifier: 0.5, offset: 0 }, // Near Hills
+    { points: [], blocks: [], color: '', speedModifier: 0.05, offset: 0 }, // Far
+    { points: [], blocks: [], color: '', speedModifier: 0.2, offset: 0 }, // Mid
+    { points: [], blocks: [], color: '', speedModifier: 0.5, offset: 0 }, // Near
   ]);
 
   // Initial Generation
   useEffect(() => {
-    const generateJaggedTerrain = (baseHeight: number, roughness: number, steps: number) => {
+    // Generate initial terrain data
+    const generateTerrain = (baseHeight: number, roughness: number, steps: number) => {
         const points = [];
         let y = baseHeight;
         for (let i = 0; i <= CANVAS_WIDTH + 400; i += steps) {
             y += (Math.random() - 0.5) * roughness;
-            // Clamping to keep terrain reasonable
             y = Math.max(20, Math.min(y, baseHeight + 150)); 
             points.push(y);
         }
         return points;
     };
 
-    bgLayersRef.current[0].points = generateJaggedTerrain(250, 100, 40); // High peaks in back
-    bgLayersRef.current[1].points = generateJaggedTerrain(150, 60, 40);  // Mid range
-    bgLayersRef.current[2].points = generateJaggedTerrain(60, 30, 20);   // Low foreground
+    // Generate city blocks for city levels
+    const generateBlocks = (count: number, avgHeight: number) => {
+        const blocks = [];
+        for(let i=0; i<count; i++) {
+            blocks.push({
+                x: i * 60,
+                w: 40 + Math.random() * 40,
+                h: avgHeight + (Math.random() - 0.5) * 100
+            });
+        }
+        return blocks;
+    };
+
+    bgLayersRef.current[0].points = generateTerrain(250, 100, 40); 
+    bgLayersRef.current[1].points = generateTerrain(150, 60, 40);  
+    bgLayersRef.current[2].points = generateTerrain(60, 30, 20);
+
+    // Also populate blocks just in case we switch to city
+    bgLayersRef.current[0].blocks = generateBlocks(30, 300);
+    bgLayersRef.current[1].blocks = generateBlocks(30, 200);
+    bgLayersRef.current[2].blocks = generateBlocks(30, 100);
 
     starsRef.current = [];
     for (let i = 0; i < 150; i++) {
@@ -180,24 +194,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const handleJump = () => {
       const player = playerRef.current;
       
-      // If exhausted, player can only do weak jumps until recovered
       if (isExhaustedRef.current) {
           player.vy = JUMP_STRENGTH * LOW_STAMINA_PENALTY;
-          // Small penalty to keep it at 0 if they spam
           player.stamina = 0; 
           return;
       }
 
-      // Normal Jump
       if (player.stamina >= JUMP_STAMINA_COST) {
           player.vy = JUMP_STRENGTH;
           player.stamina -= JUMP_STAMINA_COST;
           soundManager.playJump();
-          createParticles(player.x, player.y + 30, ParticleType.SMOKE, 5, '#cbd5e1'); // Magic dust
+          createParticles(player.x, player.y + 30, ParticleType.SMOKE, 5, '#cbd5e1');
       } else {
-          // Enter Exhaustion (The "Last Gasp" Jump)
           isExhaustedRef.current = true;
-          player.vy = JUMP_STRENGTH * 0.8; // Almost full jump for the last one
+          player.vy = JUMP_STRENGTH * 0.8;
           player.stamina = 0;
           soundManager.playTimeWarning();
       }
@@ -205,7 +215,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Global Debug Toggle - Works in any state
       if (e.key === '~' || e.code === 'Backquote') {
           setDebugMenuOpen(prev => !prev);
           return;
@@ -262,17 +271,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     }
   };
 
-  const triggerPromoExplosion = () => {
-      setCinematicMode(true);
-      setPromoMode(true);
-      pausedTimeRef.current = 0; 
-      createExplosion(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-      soundManager.playCrash();
-      setTimeout(() => {
-          pausedTimeRef.current = performance.now();
-      }, 500);
-  };
-
   useEffect(() => {
     if (gameState !== GameState.PLAYING && gameState !== GameState.INTRO) {
       soundManager.setSleighVolume(0);
@@ -316,13 +314,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       timeRef.current = TOTAL_GAME_TIME_SECONDS;
       shakeRef.current = 0;
       saturationRef.current = 1.0;
-      flickerTimerRef.current = 0;
       isLightsOutRef.current = false;
       isEndingSequenceRef.current = false;
       joyRideModeRef.current = false;
       joyRideTimerRef.current = 0;
       masterGiftDroppedRef.current = false;
-      villainLetterSpawnedRef.current = false;
       wasOnGroundRef.current = false;
       
       lastLevelIndexRef.current = -1;
@@ -415,26 +411,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           if (routeStabilityRef.current <= 0) routeStabilityRef.current = 0;
       }
 
-      // --- Stamina System (Improved) ---
+      // --- Stamina System ---
       const isOnGround = player.y >= CANVAS_HEIGHT - 55 - player.height;
-      
       if (isOnGround) {
           if (!wasOnGroundRef.current) {
-               // Landing effects
                createParticles(player.x + 20, player.y + player.height, ParticleType.DUST, 15, '#cbd5e1');
           }
           wasOnGroundRef.current = true;
-          // GROUND REGEN: Fast
           player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN_GROUND * timeScale); 
       } else {
           wasOnGroundRef.current = false;
-          // AIR REGEN: Slow, only if gliding down
           if (player.vy > 0) {
                player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN_AIR * timeScale);
           }
       }
-
-      // Exhaustion Recovery Check
       if (isExhaustedRef.current) {
           if (player.stamina >= STAMINA_RECOVERY_THRESHOLD) {
               isExhaustedRef.current = false;
@@ -445,7 +435,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const currentSpeedFrame = (BASE_SPEED + (Math.min(progressRatio, 3.0) * 6)); 
       let currentSpeed = isEndingSequenceRef.current ? currentSpeedFrame * 0.5 : currentSpeedFrame * speedMultiplier; 
       
-      // Update Stars for Parallax
+      // Update Stars
       if (!isEndingSequenceRef.current) {
         starsRef.current.forEach(star => {
             star.x -= currentSpeed * 0.02 * timeScale;
@@ -568,22 +558,33 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           cloud.x -= (cloud.speed + (currentSpeed * 0.1)) * timeScale * 0.1;
           if (cloud.x < -150) { cloud.x = CANVAS_WIDTH + 150; cloud.y = Math.random() * (CANVAS_HEIGHT / 2.5); }
       });
+      
+      // Update Background Layers
       bgLayersRef.current.forEach((layer, index) => {
           layer.offset -= currentSpeed * layer.speedModifier * timeScale;
           if (layer.offset <= -50) {
               layer.offset += 50;
               layer.points.shift();
               
-              // Procedural Generation for infinite scrolling
+              // Mountain Procedural
               const prevY = layer.points[layer.points.length - 1];
               let nextY = prevY + (Math.random() - 0.5) * (index === 0 ? 60 : 20);
-              
-              // Correct Clamping logic for positive height values
               const maxHeight = index === 0 ? 350 : (index === 1 ? 200 : 100);
               const minHeight = index === 0 ? 150 : (index === 1 ? 50 : 20);
-              
               nextY = Math.max(minHeight, Math.min(maxHeight, nextY));
               layer.points.push(nextY);
+
+              // City Block Procedural (Shift & Add)
+              if (layer.blocks.length > 0) {
+                 const firstBlock = layer.blocks[0];
+                 if (firstBlock.x + firstBlock.w + layer.offset < -200) {
+                     layer.blocks.shift();
+                     const lastBlock = layer.blocks[layer.blocks.length - 1];
+                     const newX = lastBlock.x + lastBlock.w + 10;
+                     const newH = 100 + Math.random() * 200;
+                     layer.blocks.push({x: newX, w: 40 + Math.random() * 60, h: newH});
+                 }
+              }
           }
       });
 
@@ -733,8 +734,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       drawStars(ctx, timestamp);
       drawMoon(ctx);
 
-      drawMountainLayer(ctx, bgLayersRef.current[0], CANVAS_HEIGHT, "#1e293b", timestamp); // Far - Adjusted BaseY
-      drawMountainLayer(ctx, bgLayersRef.current[1], CANVAS_HEIGHT, "#334155", timestamp); // Mid - Adjusted BaseY
+      // Draw Layers based on Terrain Type
+      if (level.terrainType === 'CITY') {
+          drawCityLayer(ctx, bgLayersRef.current[0], CANVAS_HEIGHT, level.groundPalette[0], timestamp);
+          drawCityLayer(ctx, bgLayersRef.current[1], CANVAS_HEIGHT, level.groundPalette[1], timestamp);
+      } else {
+          drawMountainLayer(ctx, bgLayersRef.current[0], CANVAS_HEIGHT, level.groundPalette[0], timestamp, level.terrainType);
+          drawMountainLayer(ctx, bgLayersRef.current[1], CANVAS_HEIGHT, level.groundPalette[1], timestamp, level.terrainType);
+      }
+      
       drawBgClouds(ctx);
       
       // --- World Transform ---
@@ -743,8 +751,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const dy = (Math.random() - 0.5) * shakeRef.current;
       ctx.translate(dx, dy);
 
-      // --- Foreground Mountains ---
-      drawMountainLayer(ctx, bgLayersRef.current[2], CANVAS_HEIGHT, "#475569", timestamp, true); // Adjusted BaseY
+      // --- Foreground ---
+      if (level.terrainType === 'CITY') {
+          drawCityLayer(ctx, bgLayersRef.current[2], CANVAS_HEIGHT, level.groundPalette[2], timestamp, true);
+      } else {
+          drawMountainLayer(ctx, bgLayersRef.current[2], CANVAS_HEIGHT, level.groundPalette[2], timestamp, level.terrainType, true);
+      }
 
       if (!cinematicMode) {
           landmarksRef.current.forEach(lm => drawLandmark(ctx, lm, timestamp));
@@ -791,11 +803,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [gameState, cinematicMode, promoMode, gameMode]);
+  }, [gameState, cinematicMode, gameMode]);
 
   // --- Helper Logic ---
   const checkCollision = (rect1: Entity, rect2: Entity) => {
-    const padding = 15; // Adjusted for visual sprite size
+    const padding = 15; 
     return (
       rect1.x + padding < rect2.x + rect2.width - padding &&
       rect1.x + rect1.width - padding > rect2.x + padding &&
@@ -890,36 +902,47 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     });
   };
 
-  const drawMountainLayer = (ctx: CanvasRenderingContext2D, layer: BackgroundLayer, baseY: number, color: string, timestamp: number, isForeground: boolean = false) => {
+  const drawMountainLayer = (
+      ctx: CanvasRenderingContext2D, 
+      layer: BackgroundLayer, 
+      baseY: number, 
+      color: string, 
+      timestamp: number, 
+      type: string, 
+      isForeground: boolean = false
+    ) => {
       ctx.fillStyle = color;
       ctx.beginPath(); 
       ctx.moveTo(0, CANVAS_HEIGHT);
       
       const segmentWidth = 50; 
       
-      // We iterate through points. layer.points contains height offsets.
       for (let i = 0; i < layer.points.length - 1; i++) {
           const x = (i * segmentWidth) + layer.offset; 
-          // CORRECTED: Subtract the height point from the bottom (baseY) to draw upwards
           const y = baseY - layer.points[i];
-          
           if (i === 0) ctx.moveTo(x, y); 
           else ctx.lineTo(x, y);
       }
       
-      // Close shape
-      ctx.lineTo(CANVAS_WIDTH + 200, CANVAS_HEIGHT); // Ensure it draws offscreen
+      ctx.lineTo(CANVAS_WIDTH + 200, CANVAS_HEIGHT);
       ctx.lineTo(0, CANVAS_HEIGHT); 
       ctx.fill();
 
-      // Snow Caps for Foreground/Mid
+      // Decoration: Snow Caps or Spikes
       if (!isForeground) {
           ctx.fillStyle = "rgba(255,255,255,0.1)";
           ctx.beginPath();
           for (let i = 0; i < layer.points.length - 1; i++) {
               const x = (i * segmentWidth) + layer.offset; 
               const y = baseY - layer.points[i];
-              if (layer.points[i] > 100) { // Only on high peaks
+              
+              if (type === 'SPIKES' && layer.points[i] > 100) {
+                 ctx.moveTo(x, y);
+                 ctx.lineTo(x + 5, y + 50);
+                 ctx.lineTo(x - 5, y + 50);
+                 ctx.fill();
+              }
+              else if (type === 'MOUNTAINS' && layer.points[i] > 100) { 
                  ctx.moveTo(x, y);
                  ctx.lineTo(x + 10, y + 20);
                  ctx.lineTo(x - 10, y + 20);
@@ -927,6 +950,37 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               }
           }
       }
+  };
+
+  const drawCityLayer = (
+      ctx: CanvasRenderingContext2D, 
+      layer: BackgroundLayer, 
+      baseY: number, 
+      color: string, 
+      timestamp: number,
+      isForeground: boolean = false
+  ) => {
+      ctx.fillStyle = color;
+      if (!layer.blocks) return;
+
+      layer.blocks.forEach((block) => {
+          const x = block.x + layer.offset;
+          if (x > -100 && x < CANVAS_WIDTH) {
+             const y = baseY - block.h;
+             ctx.fillRect(x, y, block.w, block.h);
+             
+             // Windows
+             if (!isForeground) {
+                 ctx.fillStyle = Math.sin(timestamp/500 + x) > 0 ? "rgba(255, 255, 100, 0.2)" : "rgba(255, 255, 255, 0.1)";
+                 for(let wx = x + 5; wx < x + block.w - 5; wx += 10) {
+                     for(let wy = y + 10; wy < baseY - 10; wy += 20) {
+                         if (Math.random() > 0.8) ctx.fillRect(wx, wy, 4, 8);
+                     }
+                 }
+                 ctx.fillStyle = color; // Reset
+             }
+          }
+      });
   };
 
   const drawPlayer = (ctx: CanvasRenderingContext2D, player: Player, timestamp: number) => {
@@ -1204,7 +1258,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
             stability={hudState.stability}
           />
           
-          {/* Debug Button (Top Right) - Only shows on hover or active */}
           <button 
             onClick={() => setDebugMenuOpen(!debugMenuOpen)}
             className="absolute top-4 right-4 z-50 p-2 text-slate-500 hover:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1215,7 +1268,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         </>
       )}
       
-      {/* Debug Menu Overlay */}
       {debugMenuOpen && (
           <div className="absolute top-12 right-4 bg-slate-900/95 border border-green-500/50 p-4 rounded-xl shadow-2xl backdrop-blur-md z-50 text-green-400 font-mono text-xs w-64 animate-fade-in-down">
             <div className="flex items-center justify-between border-b border-green-500/30 mb-3 pb-2">
