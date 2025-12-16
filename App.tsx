@@ -6,7 +6,7 @@ import BadEndingSequence from './components/BadEndingSequence.tsx';
 import LevelCompleteScreen from './components/LevelCompleteScreen.tsx';
 import { GameState, PowerupType, GameMode } from './types.ts';
 import { POWERUP_COLORS, LEVELS } from './constants.ts';
-import { Play, RefreshCw, HelpCircle, ArrowLeft, Loader2, FileText, X, Bell, Gift, Lock, Infinity as InfinityIcon, Zap, Map as MapIcon, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Play, RefreshCw, HelpCircle, ArrowLeft, Loader2, FileText, X, Bell, Gift, Lock, Infinity as InfinityIcon, Zap, Map as MapIcon, ChevronRight, ChevronLeft, Bug, Unlock, Trash2, CheckCircle } from 'lucide-react';
 import Logo from './components/Logo.tsx';
 
 const CURRENT_VERSION = '1.0.1';
@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const [hasSeenIntro, setHasSeenIntro] = useState(false);
 
   const [introStage, setIntroStage] = useState(0);
+  const [showDebugMenu, setShowDebugMenu] = useState(false);
 
   useEffect(() => {
     // Reset level progress on page load (session based)
@@ -43,6 +44,14 @@ const App: React.FC = () => {
     
     setIsStoryComplete(storyComplete);
     setHasSeenIntro(introSeen);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === '~' || e.code === 'Backquote') {
+            setShowDebugMenu(prev => !prev);
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []); 
 
   // Watch for game state changes to update max level from local storage if needed (though we mostly control it via state now)
@@ -129,6 +138,27 @@ const App: React.FC = () => {
       localStorage.setItem('sleigh_ride_intro_seen', 'true');
       setHasSeenIntro(true);
       setGameState(GameState.PLAYING);
+  };
+
+  const debugUnlockAll = () => {
+      const max = LEVELS.length - 1;
+      setMaxLevelReached(max);
+      localStorage.setItem('sleigh_ride_max_level', max.toString());
+  };
+
+  const debugCompleteStory = () => {
+      setIsStoryComplete(true);
+      localStorage.setItem('sleigh_ride_story_complete', 'true');
+  };
+
+  const debugResetSave = () => {
+      setMaxLevelReached(0);
+      localStorage.setItem('sleigh_ride_max_level', '0');
+      setIsStoryComplete(false);
+      localStorage.setItem('sleigh_ride_story_complete', 'false');
+      setHasSeenIntro(false);
+      localStorage.setItem('sleigh_ride_intro_seen', 'false');
+      window.location.reload(); 
   };
 
   // Cinematic Background for Menu
@@ -313,6 +343,34 @@ const App: React.FC = () => {
                     )}
                 </div>
             </div>
+            
+            <button 
+                onClick={() => setShowDebugMenu(!showDebugMenu)}
+                className="absolute top-4 right-4 z-50 p-2 text-slate-700 hover:text-red-400 transition-colors opacity-50 hover:opacity-100"
+                title="Debug Menu (~)"
+            >
+                <Bug size={16} />
+            </button>
+
+            {showDebugMenu && (
+                <div className="fixed top-12 right-4 bg-slate-900/95 border border-red-500/50 p-4 rounded-xl shadow-2xl backdrop-blur-md z-[100] text-red-400 font-mono text-xs w-64 animate-fade-in-down">
+                    <div className="flex items-center justify-between border-b border-red-500/30 mb-3 pb-2">
+                        <h3 className="font-bold flex items-center gap-2"><Bug size={14} /> MENU DEBUG</h3>
+                        <span className="text-[10px] bg-red-900/50 px-2 py-0.5 rounded text-red-300">ADMIN</span>
+                    </div>
+                    <div className="space-y-2">
+                        <button onClick={debugUnlockAll} className="w-full text-left px-3 py-2 hover:bg-red-500/10 rounded border border-transparent hover:border-red-500/30 transition-all flex items-center gap-2">
+                            <Unlock size={12} /> Unlock All Zones
+                        </button>
+                        <button onClick={debugCompleteStory} className="w-full text-left px-3 py-2 hover:bg-red-500/10 rounded border border-transparent hover:border-red-500/30 transition-all flex items-center gap-2">
+                            <CheckCircle size={12} /> Unlock Endless Mode
+                        </button>
+                        <button onClick={debugResetSave} className="w-full text-left px-3 py-2 hover:bg-red-500/10 rounded border border-transparent hover:border-red-500/30 transition-all flex items-center gap-2 text-red-300">
+                            <Trash2 size={12} /> Reset Save Data
+                        </button>
+                    </div>
+                </div>
+            )}
         </>
       )}
 

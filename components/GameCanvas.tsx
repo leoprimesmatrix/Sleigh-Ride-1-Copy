@@ -512,6 +512,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               player.isInvincible = true;
               soundManager.setSleighVolume(0);
               setCinematicMode(true); // Hide HUD
+              obstaclesRef.current = []; // Clear obstacles for clean visual
+              player.snowballs = 0; // Disable shooting
           }
       }
 
@@ -525,20 +527,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               cutsceneOpacityRef.current = Math.min(1, t * 2); // Fast fade to white
               soundManager.stopBgm();
           } 
-          // Phase 2: The Struggle (Fade in to storm)
+          // Phase 2: The Struggle (Fade in to storm, High Altitude)
           else if (t < 4.0) {
               // Fade back in from white to scene
               cutsceneOpacityRef.current = Math.max(0, 1 - (t - 1.0));
               
+              // FORCE HIGH ALTITUDE VISUALS
+              // Keep player high up
+              player.y = 100 + Math.sin(t * 15) * 10; 
+              player.angle = Math.sin(t * 10) * 0.1;
+              
               // Heavy Shake
               shakeRef.current = 5 + Math.sin(t * 20) * 2;
               
-              // Maintain altitude but struggle
-              player.y = CANVAS_HEIGHT / 3 + Math.sin(t * 15) * 20;
-              player.angle = Math.sin(t * 10) * 0.1;
-              
               // Move background fast
-              distanceRef.current += BASE_SPEED * 1.2 * timeScale;
+              distanceRef.current += BASE_SPEED * 1.5 * timeScale;
           }
           // Phase 3: The Strike
           else if (t < 4.5) {
@@ -550,7 +553,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
                   shakeRef.current = 40; // Violent shake
                   createExplosion(player.x + 20, player.y + 10);
               }
-              // Static shock effect handled in draw
           }
           // Phase 4: Suspension (Smoke, Stunned)
           else if (t < 6.5) {
@@ -561,28 +563,41 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
                   createParticles(player.x + 20, player.y + 10, ParticleType.SMOKE, 1, '#555');
               }
               
-              // Slight drift down
-              player.y += 0.5 * timeScale;
+              // Slight drift, still high up
+              player.y = 120 + Math.sin(t * 5) * 5;
               player.angle += 0.005 * timeScale;
               
               // Slow down background movement
               distanceRef.current += BASE_SPEED * 0.5 * timeScale;
           }
-          // Phase 5: The Fall
-          else if (t < 9.0) {
-              // Gravity kicks in hard
-              player.vy += 1.5 * timeScale; 
-              player.y += player.vy * timeScale;
+          // Phase 5: The Descent (EXTENDED & HIGH SPEED VISUALS)
+          else if (t < 12.0) {
+              const descentProgress = (t - 6.5) / 5.5; // 0 to 1 over 5.5 seconds
               
-              // Nose dive
-              const targetAngle = Math.PI / 2.5; 
-              player.angle += (targetAngle - player.angle) * 0.1 * timeScale;
+              // Camera Tracking Logic:
+              // Instead of letting player fall off screen, we keep them in view but move everything else up
+              // We gently push player down to simulate losing altitude relative to camera
+              
+              if (descentProgress < 0.85) {
+                   // Slow drift down in screen space (200px over 4s)
+                   const targetY = 150 + descentProgress * 300; 
+                   player.y += (targetY - player.y) * 0.05 * timeScale;
+              } else {
+                   // Final plummet to bottom in last second
+                   player.vy += 2.0 * timeScale;
+                   player.y += player.vy * timeScale;
+              }
+
+              // Pitch nose down significantly
+              const targetAngle = Math.PI / 2.2; 
+              player.angle += (targetAngle - player.angle) * 0.05 * timeScale;
               
               // Heavy smoke/fire
               createParticles(player.x + 20, player.y + 10, ParticleType.SMOKE, 3, '#333');
-              createParticles(player.x + 20, player.y + 10, ParticleType.FIRE, 2, '#f59e0b');
+              if (Math.random() > 0.5) createParticles(player.x + 20, player.y + 10, ParticleType.FIRE, 1, '#f59e0b');
               
-              distanceRef.current += BASE_SPEED * 0.2 * timeScale;
+              // Intense Shake implies speed
+              shakeRef.current = 5 + descentProgress * 15;
           }
           // Phase 6: Cut to Black
           else {
@@ -629,8 +644,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       
       if (!isEndingSequenceRef.current) {
         starsRef.current.forEach(star => {
-            star.x -= currentSpeed * 0.02 * timeScale;
-            if (star.x < 0) star.x += logicalWidth;
+            // Stars move upward during descent to simulate falling
+            if (isCrashSequenceRef.current && crashTimerRef.current > 6.5) {
+               star.y -= 20 * timeScale; // Upward stream
+               star.x -= currentSpeed * 0.02 * timeScale;
+               if (star.y < 0) {
+                   star.y += CANVAS_HEIGHT;
+                   star.x = Math.random() * logicalWidth;
+               }
+            } else {
+               star.x -= currentSpeed * 0.02 * timeScale;
+               if (star.x < 0) star.x += logicalWidth;
+            }
         });
       }
 
@@ -785,6 +810,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       player.isInvincible = player.invincibleTimer > 0;
 
       bgCloudsRef.current.forEach(cloud => {
+          // Cloud logic (move up if falling)
+          if (isCrashSequenceRef.current && crashTimerRef.current > 6.5) {
+               cloud.y -= 15 * timeScale; 
+               if (cloud.y < -100) cloud.y = CANVAS_HEIGHT + 100;
+          }
+
           cloud.x -= (cloud.speed + (currentSpeed * 0.1)) * timeScale * 0.1;
           if (cloud.x < -150) { cloud.x = logicalWidth + 150; cloud.y = Math.random() * (CANVAS_HEIGHT / 2.5); }
       });
@@ -977,7 +1008,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
       drawStars(ctx, timestamp);
 
-      // Draw Layers based on Terrain Type
+      // Draw Layers based on Terrain Type (Hide ground during crash sequence high altitude phase)
+      // Only draw mountains if not in deep descent or shift them down
+      let groundOffset = 0;
+      if (isCrashSequenceRef.current && crashTimerRef.current > 4.0 && crashTimerRef.current < 11.0) {
+          groundOffset = 400; // Push ground down to simulate height
+      }
+
+      ctx.save();
+      ctx.translate(0, groundOffset);
+
       if (level.terrainType === 'CITY') {
           drawCityLayer(ctx, bgLayersRef.current[0], CANVAS_HEIGHT, level.groundPalette[0], timestamp, false, logicalWidth);
           drawCityLayer(ctx, bgLayersRef.current[1], CANVAS_HEIGHT, level.groundPalette[1], timestamp, false, logicalWidth);
@@ -985,6 +1025,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           drawMountainLayer(ctx, bgLayersRef.current[0], CANVAS_HEIGHT, level.groundPalette[0], timestamp, level.terrainType, false, logicalWidth);
           drawMountainLayer(ctx, bgLayersRef.current[1], CANVAS_HEIGHT, level.groundPalette[1], timestamp, level.terrainType, false, logicalWidth);
       }
+      ctx.restore();
       
       drawBgClouds(ctx);
       
@@ -997,12 +1038,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const dy = (Math.random() - 0.5) * shakeRef.current;
       ctx.translate(dx, dy);
 
-      // --- Foreground ---
+      // --- Foreground (Shifted down during crash) ---
+      ctx.save();
+      ctx.translate(0, groundOffset);
       if (level.terrainType === 'CITY') {
           drawCityLayer(ctx, bgLayersRef.current[2], CANVAS_HEIGHT, level.groundPalette[2], timestamp, true, logicalWidth);
       } else {
           drawMountainLayer(ctx, bgLayersRef.current[2], CANVAS_HEIGHT, level.groundPalette[2], timestamp, level.terrainType, true, logicalWidth);
       }
+      ctx.restore();
 
       if (!cinematicMode || isCrashSequenceRef.current) {
           if (!cinematicMode) {
@@ -1033,6 +1077,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           updateAndDrawParticle(ctx, p, timestamp);
       });
       particlesRef.current = particlesRef.current.filter(p => p.life > 0);
+
+      // --- Speed Lines Effect for Descent ---
+      if (isCrashSequenceRef.current && crashTimerRef.current > 6.5) {
+          drawSpeedLines(ctx, logicalWidth);
+      }
 
       // --- Weather Effects ---
       // Dynamic Intensity based on progress
@@ -1178,6 +1227,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
   // --- DRAWING FUNCTIONS ---
 
+  const drawSpeedLines = (ctx: CanvasRenderingContext2D, width: number) => {
+      ctx.save();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 20; i++) {
+          const x = Math.random() * width;
+          const y = Math.random() * CANVAS_HEIGHT;
+          const len = 50 + Math.random() * 100;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, y - len); // Vertical lines upward
+          ctx.stroke();
+      }
+      ctx.restore();
+  };
+
   const drawStaticEffect = (ctx: CanvasRenderingContext2D, player: Player) => {
       ctx.save();
       ctx.translate(player.x, player.y);
@@ -1277,7 +1342,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           if (isCrashSequenceRef.current && crashTimerRef.current > 1.0) {
               // Horizontal blizzard in cutscene
               p.x -= 20; 
-              p.y += p.vy;
+              // Upward motion to simulate falling
+              if (crashTimerRef.current > 6.5) {
+                   p.y -= 15;
+              } else {
+                   p.y += p.vy;
+              }
           } else {
               p.x += p.vx * effectiveIntensity;
               p.y += p.vy * effectiveIntensity;
@@ -1286,12 +1356,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           if (p.y > CANVAS_HEIGHT) {
               p.y = -10;
               p.x = Math.random() * width;
+          } else if (p.y < -20) {
+              p.y = CANVAS_HEIGHT + 10;
+              p.x = Math.random() * width;
           }
+
           if (p.x > width) {
               p.x = 0;
           } else if (p.x < 0) {
               p.x = width;
-              p.y = Math.random() * CANVAS_HEIGHT;
+              if (!isCrashSequenceRef.current || crashTimerRef.current <= 6.5) p.y = Math.random() * CANVAS_HEIGHT;
           }
           
           // Draw
