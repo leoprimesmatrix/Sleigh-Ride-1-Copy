@@ -61,7 +61,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const logicalWidthRef = useRef(1200);
 
   const playerRef = useRef<Player>({
-    id: 0, x: 150, y: 300, width: 90, height: 40, markedForDeletion: false,
+    id: 0, x: 150, y: 300, width: 120, height: 40, markedForDeletion: false,
     vy: 0, lives: 3, snowballs: 0, isInvincible: false, invincibleTimer: 0,
     healingTimer: 0, speedTimer: 0, angle: 0,
     stamina: MAX_STAMINA, maxStamina: MAX_STAMINA,
@@ -69,6 +69,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   });
   
   const isExhaustedRef = useRef(false);
+  const manualBoostRef = useRef(false);
+  const manualBoostLevelRef = useRef(1.0);
 
   const obstaclesRef = useRef<Obstacle[]>([]);
   const powerupsRef = useRef<Powerup[]>([]);
@@ -104,6 +106,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const masterGiftDroppedRef = useRef(false);
   const wasOnGroundRef = useRef(false);
   const trailTimerRef = useRef(0);
+  
+  // Guaranteed Spawn Checkpoints
+  const level1SpawnsRef = useRef(new Set<number>());
+  const level2SpawnsRef = useRef(new Set<number>());
   
   // Track last warning sound time
   const lastStaminaWarnTimeRef = useRef(0);
@@ -254,6 +260,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       if (gameState !== GameState.PLAYING) return;
       if ((e.code === 'Space' || e.code === 'ArrowUp') && !isEndingSequenceRef.current) handleJump();
       if ((e.code === 'KeyZ' || e.code === 'Enter') && !isEndingSequenceRef.current) shootSnowball();
+      if (e.key === 'Shift') manualBoostRef.current = true;
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+        if (e.key === 'Shift') manualBoostRef.current = false;
     };
     
     const handleTouch = () => {
@@ -263,9 +274,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     };
 
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('touchstart', handleTouch);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('touchstart', handleTouch);
     };
   }, [gameState]);
@@ -300,7 +313,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
       // Reset Player
       playerRef.current = {
-        id: 0, x: 150, y: 300, width: 90, height: 40, markedForDeletion: false,
+        id: 0, x: 150, y: 300, width: 120, height: 40, markedForDeletion: false,
         vy: 0, lives: 3, snowballs: 3, isInvincible: false, invincibleTimer: 0,
         healingTimer: 0, speedTimer: 0, angle: 0,
         stamina: MAX_STAMINA, maxStamina: MAX_STAMINA,
@@ -333,6 +346,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       crashTimerRef.current = 0;
       cutsceneOpacityRef.current = 0;
       missionProgressRef.current = 0;
+      level1SpawnsRef.current.clear();
+      level2SpawnsRef.current.clear();
+      manualBoostRef.current = false;
+      manualBoostLevelRef.current = 1.0;
       
       routeStabilityRef.current = INITIAL_STABILITY;
       distanceRef.current = initialDistance;
@@ -468,20 +485,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       
       if (flashTimerRef.current > 0) flashTimerRef.current -= dt;
       
-      const speedMultiplier = player.speedTimer > 0 ? 1.5 : 1.0;
-      let progressRatio = distanceRef.current / VICTORY_DISTANCE;
-      if (gameMode === GameMode.STORY) progressRatio = Math.min(1.02, progressRatio);
-
-      // Level Index Calculation
+      // LEVEL SPECIFIC UPDATES
       let levelIndex = 0;
       if (gameMode === GameMode.STORY) {
           levelIndex = startLevelIndex;
       } else {
-          // Endless mode logic
-          let effectiveProgress = progressRatio * 100;
-          if (progressRatio > 1) {
-              effectiveProgress = (progressRatio % 1) * 100;
-          }
+          // Endless mode logic...
+          let effectiveProgress = (distanceRef.current / VICTORY_DISTANCE) * 100;
+          if (effectiveProgress > 100) effectiveProgress = effectiveProgress % 100;
           for (let i = LEVELS.length - 1; i >= 0; i--) {
             if (effectiveProgress >= LEVEL_THRESHOLDS[i]) {
               levelIndex = i;
@@ -489,10 +500,48 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
             }
           }
       }
-      
-      // Sync Ref
       currentLevelIndexRef.current = levelIndex;
       
+      // MANUAL BOOST LOGIC (Level 4)
+      let boostMultiplier = 1.0;
+      if (levelIndex === 3) {
+          if (manualBoostRef.current) {
+              manualBoostLevelRef.current = Math.min(1.5, manualBoostLevelRef.current + 0.01 * timeScale);
+          } else {
+              manualBoostLevelRef.current = Math.max(1.0, manualBoostLevelRef.current - 0.02 * timeScale);
+          }
+          boostMultiplier = manualBoostLevelRef.current;
+      }
+
+      const speedMultiplier = (player.speedTimer > 0 ? 1.5 : 1.0) * boostMultiplier;
+      let progressRatio = distanceRef.current / VICTORY_DISTANCE;
+      if (gameMode === GameMode.STORY) progressRatio = Math.min(1.02, progressRatio);
+
+      // GUARANTEED SPAWNS
+      if (levelIndex === 0) {
+          [2000, 6000, 10000].forEach(d => {
+              if (distanceRef.current > d && !level1SpawnsRef.current.has(d)) {
+                  level1SpawnsRef.current.add(d);
+                  powerupsRef.current.push({
+                      id: Date.now(), x: logicalWidth + 100, y: Math.random() * (CANVAS_HEIGHT - 200) + 50,
+                      width: 40, height: 40, type: PowerupType.SNOWBALLS, floatOffset: 0, markedForDeletion: false
+                  });
+              }
+          });
+      }
+      if (levelIndex === 1) {
+          [2000, 5000, 8000, 11000, 14000].forEach(d => {
+              if (distanceRef.current > d && !level2SpawnsRef.current.has(d)) {
+                  level2SpawnsRef.current.add(d);
+                  lettersRef.current.push({
+                      id: Date.now(), x: logicalWidth + 100, y: Math.random() * (CANVAS_HEIGHT - 200) + 50,
+                      width: 40, height: 30, floatOffset: 0, markedForDeletion: false,
+                      message: "Guaranteed Letter", variant: 'NORMAL'
+                  });
+              }
+          });
+      }
+
       // Update max reached level
       const maxReached = parseInt(localStorage.getItem('sleigh_ride_max_level') || '0');
       if (levelIndex > maxReached && gameMode === GameMode.ENDLESS) {
@@ -505,12 +554,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       if (!isEndingSequenceRef.current && !isCrashSequenceRef.current) {
           const mType = level.missionType;
           if (mType === 'MAINTAIN_SPEED') {
-              if (player.speedTimer > 0) {
+              // Level 4 mission: Hold shift to boost
+              if (manualBoostLevelRef.current > 1.4) {
                   missionProgressRef.current = Math.min(level.missionTarget, missionProgressRef.current + dt);
               }
           } else if (mType === 'LOW_ALTITUDE') {
               if (player.y > CANVAS_HEIGHT / 2) {
                   missionProgressRef.current = Math.min(level.missionTarget, missionProgressRef.current + dt);
+                  // Level 3 specific restoration
+                  routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 5 * dt); 
               }
           } else if (mType === 'COLLECT_WISHES') {
               // Handled in letter collision
@@ -523,8 +575,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           // Apply drain unless infinite
           if (!infiniteStabilityRef.current) {
               // DYNAMIC STABILITY DRAIN
-              // Scales up as you progress through the level
-              const progressFactor = 1 + (progressRatio * 2.5); // Starts at 1x, ends at 3.5x drain
+              const progressFactor = 1 + (progressRatio * 2.5); 
               routeStabilityRef.current -= level.stabilityDrainRate * timeScale * progressFactor;
           }
           if (routeStabilityRef.current <= 0) routeStabilityRef.current = 0;
@@ -532,7 +583,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
       // --- SCRIPTED EVENTS FOR LEVEL 5 (Index 4) ---
       if (levelIndex === 4 && gameMode === GameMode.STORY) {
-          // 60% Progress: Crash Sequence triggers (Shortened for dramatic effect per request)
+          // 60% Progress: Crash Sequence triggers
           if (progressRatio > 0.6 && !isCrashSequenceRef.current) {
               isCrashSequenceRef.current = true;
               player.isInvincible = true;
@@ -578,6 +629,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
                   soundManager.playShock();
                   shakeRef.current = 40; // Violent shake
                   createExplosion(player.x + 20, player.y + 10);
+                  
+                  // BEAST ATTACK: Just visual cue in drawBeast
               }
           }
           // Phase 4: Suspension (Smoke, Stunned)
@@ -599,10 +652,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           // Phase 5: The Descent (EXTENDED & HIGH SPEED VISUALS)
           else if (t < 12.0) {
               const descentProgress = (t - 6.5) / 5.5; // 0 to 1 over 5.5 seconds
-              
-              // Camera Tracking Logic:
-              // Instead of letting player fall off screen, we keep them in view but move everything else up
-              // We gently push player down to simulate losing altitude relative to camera
               
               if (descentProgress < 0.85) {
                    // Slow drift down in screen space (200px over 4s)
@@ -928,7 +977,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
            if (gameMode === GameMode.STORY && levelIndex === 4) {
            } else {
                player.lives--;
-               routeStabilityRef.current -= 15; 
+               routeStabilityRef.current -= 15;
+               
+               // Level 4 Penalty: Reset manual boost
+               if (levelIndex === 3) {
+                   manualBoostLevelRef.current = 1.0;
+               }
+               
                soundManager.playCrash();
                player.invincibleTimer = 2.0;
                shakeRef.current = 20;
@@ -946,6 +1001,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         if (!cinematicMode && !isCrashSequenceRef.current && checkCollision(player, pup)) {
           pup.markedForDeletion = true;
           applyPowerup(pup.type);
+          
+          // Level 5 Stability Boost
+          if (levelIndex === 4) {
+              routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 30);
+          }
+
           soundManager.playPowerup(pup.type);
           createParticles(pup.x, pup.y, ParticleType.SPARKLE, 20, POWERUP_COLORS[pup.type]);
           createParticles(pup.x, pup.y, ParticleType.GLOW, 10, POWERUP_COLORS[pup.type]);
@@ -966,6 +1027,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               
               // REBALANCED REWARD: Increased stability gain
               routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 10);
+              
+              // Level 5 Stability Boost
+              if (levelIndex === 4) {
+                  routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 30);
+              }
               
               wishesCollectedCountRef.current += 1;
               
@@ -1057,8 +1123,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
          drawAurora(ctx, timestamp, logicalWidth, level.ambientLight);
       }
       
+      // Beast (Level 5) - Behind Mountains
+      if (levelIndex === 4 && !isEndingSequenceRef.current) {
+          drawBeast(ctx, timestamp, logicalWidth);
+      }
+      
       // Distant Planet/Moon for added depth
-      if (level.terrainType !== 'CITY') {
+      if (level.terrainType !== 'CITY' && levelIndex !== 4) {
          drawMoon(ctx, logicalWidth);
       }
 
@@ -1211,8 +1282,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
   // --- Helper Logic ---
   const checkCollision = (rect1: Entity, rect2: Entity) => {
-    // FIX: Reduced padding from 25 to 10. 
-    // Previous value (25) made the effective height negative (40 - 50 = -10), preventing collisions.
+    // FIX: HITBOX ISSUE
+    // Player width updated to 120 (approx visual size).
+    // Padding kept at 10 to be forgiving.
     const padding = 10; 
     return (
       rect1.x + padding < rect2.x + rect2.width - padding &&
@@ -1285,6 +1357,81 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   };
 
   // --- DRAWING FUNCTIONS ---
+
+  const drawBeast = (ctx: CanvasRenderingContext2D, timestamp: number, width: number) => {
+      ctx.save();
+      // Parallax position for background beast
+      const x = width - 250 - (timestamp * 0.01 % 100); 
+      const y = 200 + Math.sin(timestamp * 0.001) * 20;
+      
+      ctx.translate(x, y);
+      const scale = 2.0;
+      ctx.scale(scale, scale);
+      
+      // Shadowy form
+      ctx.fillStyle = "rgba(10, 10, 20, 0.9)";
+      ctx.shadowColor = "black";
+      ctx.shadowBlur = 20;
+      
+      // Rough beast shape (head and shoulders)
+      ctx.beginPath();
+      ctx.moveTo(-50, 100);
+      ctx.bezierCurveTo(-40, 50, -30, 0, 0, -20); // Head L
+      ctx.bezierCurveTo(30, 0, 40, 50, 50, 100); // Head R
+      ctx.fill();
+      
+      // Glowing Eyes
+      const eyeGlow = 10 + Math.sin(timestamp * 0.005) * 5;
+      
+      // If crashing, eyes flare up
+      const isAttacking = isCrashSequenceRef.current && crashTimerRef.current > 3.5 && crashTimerRef.current < 4.5;
+      
+      ctx.shadowColor = "red";
+      ctx.shadowBlur = isAttacking ? 50 : eyeGlow;
+      ctx.fillStyle = isAttacking ? "#fff" : "#ef4444";
+      
+      // Left Eye
+      ctx.beginPath();
+      ctx.ellipse(-15, 10, 4, 8, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Right Eye
+      ctx.beginPath();
+      ctx.ellipse(15, 10, 4, 8, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Lightning Attack Animation
+      if (isAttacking) {
+          ctx.restore(); // Reset transform to draw lightning in world space
+          ctx.save();
+          ctx.strokeStyle = "#fff";
+          ctx.shadowColor = "#0ea5e9";
+          ctx.shadowBlur = 30;
+          ctx.lineWidth = 4;
+          
+          ctx.beginPath();
+          ctx.moveTo(x * scale * scale /* approx logic */, y); // From beast
+          // Just draw erratic lines to center screen
+          let cx = x + 300; // Beast world pos approx
+          let cy = y + 100;
+          let targetX = playerRef.current.x;
+          let targetY = playerRef.current.y;
+          
+          ctx.moveTo(cx, cy);
+          const segments = 10;
+          for(let i=1; i<segments; i++) {
+              let lx = cx + (targetX - cx) * (i/segments);
+              let ly = cy + (targetY - cy) * (i/segments);
+              lx += (Math.random() - 0.5) * 100;
+              ly += (Math.random() - 0.5) * 100;
+              ctx.lineTo(lx, ly);
+          }
+          ctx.lineTo(targetX, targetY);
+          ctx.stroke();
+      }
+      
+      ctx.restore();
+  };
 
   const drawTrail = (ctx: CanvasRenderingContext2D, player: Player) => {
       if (player.trail.length < 2) return;
@@ -1666,10 +1813,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     ctx.beginPath(); ctx.moveTo(-5, -18); ctx.quadraticCurveTo(-15, -15, -25 + Math.sin(timestamp/100)*3, -18); ctx.stroke();
 
     // Boost Aura
-    if (player.speedTimer > 0) {
+    if (player.speedTimer > 0 || manualBoostRef.current) {
         ctx.globalCompositeOperation = 'screen';
-        ctx.fillStyle = "rgba(255, 200, 0, 0.4)";
-        ctx.beginPath(); ctx.ellipse(10, 0, 90, 50, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = manualBoostRef.current ? "rgba(56, 189, 248, 0.4)" : "rgba(255, 200, 0, 0.4)";
+        ctx.beginPath(); ctx.ellipse(10, 0, 100, 55, 0, 0, Math.PI*2); ctx.fill();
         ctx.globalCompositeOperation = 'source-over';
     }
 

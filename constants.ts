@@ -45,7 +45,7 @@ export const LEVELS: LevelConfig[] = [
     spawnRateMultiplier: 1.5, // Increased spawn for destruction targets
     weatherIntensity: 2,
     weatherType: 'SNOWSTORM',
-    stabilityDrainRate: 0.01 // Reduced from 0.03
+    stabilityDrainRate: 0.01 
   },
   {
     name: "The Dark Metropolis",
@@ -61,7 +61,7 @@ export const LEVELS: LevelConfig[] = [
     spawnRateMultiplier: 1.2,
     weatherIntensity: 0,
     weatherType: 'CLEAR',
-    stabilityDrainRate: 0.02 // Reduced from 0.05
+    stabilityDrainRate: 0.02 
   },
   {
     name: "Turbulent Skies",
@@ -77,12 +77,12 @@ export const LEVELS: LevelConfig[] = [
     spawnRateMultiplier: 0.9,
     weatherIntensity: 3,
     weatherType: 'TURBULENCE',
-    stabilityDrainRate: 0.03 // Reduced from 0.04
+    stabilityDrainRate: 0.015 // Reduced from 0.03
   },
   {
     name: "The Glacial Spikes",
-    description: "High winds ahead. Route integrity critical.",
-    missionObjective: "Maintain High Speed for 10s.",
+    description: "High winds ahead. Hold SHIFT to accelerate.",
+    missionObjective: "Maintain Hyper Speed for 10s.",
     missionType: 'MAINTAIN_SPEED',
     missionTarget: 10,
     backgroundGradient: ['#082f49', '#0ea5e9'], // Cyan/Blue
@@ -93,7 +93,7 @@ export const LEVELS: LevelConfig[] = [
     spawnRateMultiplier: 1.3,
     weatherIntensity: 5,
     weatherType: 'WIND_CORRIDOR',
-    stabilityDrainRate: 0.08 // Increased for challenge
+    stabilityDrainRate: 0.04 // Reduced from 0.08
   },
   {
     name: "Eye of the Storm",
@@ -109,7 +109,7 @@ export const LEVELS: LevelConfig[] = [
     spawnRateMultiplier: 1.0,
     weatherIntensity: 8,
     weatherType: 'SNOWSTORM',
-    stabilityDrainRate: 0.12 // Significantly increased
+    stabilityDrainRate: 0.06 // Reduced from 0.12
   }
 ];
 
