@@ -892,7 +892,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           player.angle += (targetAngle - player.angle) * 0.1 * timeScale;
       }
       
-      if (player.y + player.height > CANVAS_HEIGHT - 50) { player.y = CANVAS_HEIGHT - 50 - player.height; player.vy = 0; }
+      // Update collision only if not crashing, or if crashing, do not apply floor constraint
+      if (player.y + player.height > CANVAS_HEIGHT - 50 && !isCrashSequenceRef.current) { 
+          player.y = CANVAS_HEIGHT - 50 - player.height; 
+          player.vy = 0; 
+      }
+      
       if (player.y < 0) { player.y = 0; player.vy = 0; }
       if (player.invincibleTimer > 0) player.invincibleTimer -= dt;
       if (player.speedTimer > 0) player.speedTimer -= dt;
