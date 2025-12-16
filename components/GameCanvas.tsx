@@ -1124,8 +1124,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       }
       
       // Beast (Level 5) - Behind Mountains
+      // Disappear after lightning attack (approx 4.5s into crash sequence)
       if (levelIndex === 4 && !isEndingSequenceRef.current) {
-          drawBeast(ctx, timestamp, logicalWidth);
+          if (!isCrashSequenceRef.current || crashTimerRef.current < 4.5) {
+              drawBeast(ctx, timestamp, logicalWidth);
+          }
       }
       
       // Distant Planet/Moon for added depth
