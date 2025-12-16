@@ -522,7 +522,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       if (!isEndingSequenceRef.current && !isCrashSequenceRef.current) {
           // Apply drain unless infinite
           if (!infiniteStabilityRef.current) {
-              routeStabilityRef.current -= level.stabilityDrainRate * timeScale;
+              // DYNAMIC STABILITY DRAIN
+              // Scales up as you progress through the level
+              const progressFactor = 1 + (progressRatio * 2.5); // Starts at 1x, ends at 3.5x drain
+              routeStabilityRef.current -= level.stabilityDrainRate * timeScale * progressFactor;
           }
           if (routeStabilityRef.current <= 0) routeStabilityRef.current = 0;
       }
@@ -960,7 +963,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               soundManager.playCollectWish();
               createParticles(letter.x, letter.y, ParticleType.SPARKLE, 15, '#fbbf24');
               createParticles(letter.x, letter.y, ParticleType.GLOW, 5, 'gold');
-              routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 5);
+              
+              // REBALANCED REWARD: Increased stability gain
+              routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 10);
+              
               wishesCollectedCountRef.current += 1;
               
               if (level.missionType === 'COLLECT_WISHES') {
@@ -985,7 +991,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
             soundManager.playCrash();
             createParticles(obs.x + obs.width/2, obs.y + obs.height/2, ParticleType.DEBRIS, 10, '#fff');
             scoreRef.current += 50;
-            routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 5); 
+            
+            // REBALANCED REWARD: Increased stability gain
+            routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 8); 
             
             if (level.missionType === 'DESTROY_OBSTACLES') {
                 missionProgressRef.current = Math.min(level.missionTarget, missionProgressRef.current + 1);
@@ -1203,7 +1211,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
   // --- Helper Logic ---
   const checkCollision = (rect1: Entity, rect2: Entity) => {
-    const padding = 25; // INCREASED PADDING FOR FORGIVING HITBOX
+    // FIX: Reduced padding from 25 to 10. 
+    // Previous value (25) made the effective height negative (40 - 50 = -10), preventing collisions.
+    const padding = 10; 
     return (
       rect1.x + padding < rect2.x + rect2.width - padding &&
       rect1.x + rect1.width - padding > rect2.x + padding &&

@@ -9,7 +9,7 @@ import { POWERUP_COLORS, LEVELS } from './constants.ts';
 import { Play, RefreshCw, HelpCircle, ArrowLeft, Loader2, FileText, X, Bell, Gift, Lock, Infinity as InfinityIcon, Zap, Map as MapIcon, ChevronRight, ChevronLeft, Bug, Unlock, Trash2, CheckCircle } from 'lucide-react';
 import Logo from './components/Logo.tsx';
 
-const CURRENT_VERSION = '1.0.1';
+const CURRENT_VERSION = '1.0.2';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
@@ -565,7 +565,7 @@ const App: React.FC = () => {
           {gameState === GameState.CLIFFHANGER && (
               <div className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center animate-fade-in duration-[3000ms]">
                   <p className="text-3xl md:text-5xl font-christmas text-white tracking-widest text-center leading-loose opacity-0 animate-[fade-in-up_4s_ease-out_3s_forwards] px-8">
-                      "From this moment on,<br/>everything will change."
+                      From this moment, <br/><span className="text-red-500 font-bold">everything</span> will change.
                   </p>
                   
                   <button 
