@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
-import { Heart, Snowflake, Clock, Zap, Sparkles, Plus, Mail, Skull, Battery, Activity } from 'lucide-react';
-import { Player, PowerupType, DialogueLine, LetterVariant } from '../types.ts';
+import { Heart, Snowflake, Clock, Zap, Sparkles, Plus, Mail, Skull, Battery, Activity, Target } from 'lucide-react';
+import { Player, PowerupType, DialogueLine, LetterVariant, MissionType } from '../types.ts';
 import { POWERUP_COLORS, REQUIRED_WISHES, MAX_STAMINA, INITIAL_STABILITY } from '../constants.ts';
 
 interface UIOverlayProps {
@@ -18,6 +18,12 @@ interface UIOverlayProps {
   wishesCollected: number;
   stamina: number;
   stability: number;
+  mission?: {
+      type: MissionType;
+      progress: number;
+      target: number;
+      objective: string;
+  };
 }
 
 const UIOverlay: React.FC<UIOverlayProps> = ({
@@ -33,7 +39,8 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
   activeWish,
   wishesCollected,
   stamina,
-  stability
+  stability,
+  mission
 }) => {
   
   const [popups, setPopups] = useState<{id: number, type: PowerupType}[]>([]);
@@ -67,12 +74,23 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
 
   // Calculations for bars
   const staminaPercent = Math.min(100, (stamina / MAX_STAMINA) * 100);
+  const isStaminaLow = staminaPercent < 25;
   const stabilityPercent = Math.min(100, (stability / INITIAL_STABILITY) * 100);
   const isStabilityLow = stabilityPercent < 30;
   
   return (
     <div className="absolute inset-0 flex flex-col justify-between p-6 pointer-events-none z-20">
       
+      <style>{`
+        @keyframes flash-red {
+            0%, 100% { border-color: rgba(239, 68, 68, 0.3); box-shadow: 0 0 0 rgba(239, 68, 68, 0); }
+            50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
+        }
+        .animate-flash-red {
+            animation: flash-red 0.5s infinite;
+        }
+      `}</style>
+
       {/* Powerup Popups */}
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
         {popups.map(p => {
@@ -168,16 +186,16 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
           </div>
 
           {/* Reindeer Stamina Meter */}
-          <div className="bg-slate-900/60 backdrop-blur-md px-3 py-2 rounded-xl border border-slate-700/50 shadow-lg w-56 flex flex-col gap-1">
+          <div className={`bg-slate-900/60 backdrop-blur-md px-3 py-2 rounded-xl border shadow-lg w-56 flex flex-col gap-1 transition-all ${isStaminaLow ? 'border-red-500 animate-flash-red' : 'border-slate-700/50'}`}>
              <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 <div className="flex items-center gap-1">
-                    <Battery size={10} className="text-yellow-500" />
+                    <Battery size={10} className={isStaminaLow ? "text-red-500 animate-pulse" : "text-yellow-500"} />
                     Stamina
                 </div>
              </div>
              <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
                  <div 
-                    className="h-full bg-yellow-400 transition-all duration-100"
+                    className={`h-full transition-all duration-100 ${isStaminaLow ? 'bg-red-500' : 'bg-yellow-400'}`}
                     style={{ width: `${staminaPercent}%` }}
                  />
              </div>
@@ -194,6 +212,24 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
                 {currentLevelName}
             </h2>
           </div>
+          
+          {/* Mission Objective HUD */}
+          {mission && mission.type !== 'SURVIVE' && (
+              <div className="mt-2 bg-blue-900/40 backdrop-blur-md px-4 py-2 rounded-lg border border-blue-500/30 flex items-center gap-3">
+                  <div className="p-1.5 bg-blue-500/20 rounded-full">
+                      <Target size={14} className="text-blue-300" />
+                  </div>
+                  <div className="flex flex-col items-start">
+                      <span className="text-[10px] uppercase font-bold text-blue-200 tracking-wider">Mission Objective</span>
+                      <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">{mission.objective}</span>
+                          <span className={`text-xs font-mono font-bold ${mission.progress >= mission.target ? 'text-green-400' : 'text-yellow-400'}`}>
+                              {Math.floor(mission.progress)} / {mission.target}
+                          </span>
+                      </div>
+                  </div>
+              </div>
+          )}
         </div>
 
         {/* RIGHT: Objectives & Buffs */}

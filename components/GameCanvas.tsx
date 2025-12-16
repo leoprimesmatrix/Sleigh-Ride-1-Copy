@@ -64,7 +64,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     id: 0, x: 150, y: 300, width: 90, height: 40, markedForDeletion: false,
     vy: 0, lives: 3, snowballs: 0, isInvincible: false, invincibleTimer: 0,
     healingTimer: 0, speedTimer: 0, angle: 0,
-    stamina: MAX_STAMINA, maxStamina: MAX_STAMINA
+    stamina: MAX_STAMINA, maxStamina: MAX_STAMINA,
+    trail: []
   });
   
   const isExhaustedRef = useRef(false);
@@ -82,6 +83,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   // Game System Refs
   const routeStabilityRef = useRef(INITIAL_STABILITY);
   const infiniteStabilityRef = useRef(false); // Debug Ref
+  const missionProgressRef = useRef(0);
   
   const starsRef = useRef<{x:number, y:number, size:number, phase:number}[]>([]);
   const bgCloudsRef = useRef<{x:number, y:number, speed:number, scale:number, opacity: number}[]>([]);
@@ -197,7 +199,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
     activeWish: null as { message: string, variant: LetterVariant } | null,
     wishesCollected: 0,
     stamina: MAX_STAMINA,
-    stability: INITIAL_STABILITY
+    stability: INITIAL_STABILITY,
+    missionProgress: 0
   });
 
   const handleJump = () => {
@@ -300,7 +303,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         id: 0, x: 150, y: 300, width: 90, height: 40, markedForDeletion: false,
         vy: 0, lives: 3, snowballs: 3, isInvincible: false, invincibleTimer: 0,
         healingTimer: 0, speedTimer: 0, angle: 0,
-        stamina: MAX_STAMINA, maxStamina: MAX_STAMINA
+        stamina: MAX_STAMINA, maxStamina: MAX_STAMINA,
+        trail: []
       };
 
       // Reset World Entities
@@ -328,6 +332,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       isCrashSequenceRef.current = false;
       crashTimerRef.current = 0;
       cutsceneOpacityRef.current = 0;
+      missionProgressRef.current = 0;
       
       routeStabilityRef.current = INITIAL_STABILITY;
       distanceRef.current = initialDistance;
@@ -495,6 +500,24 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       }
 
       const level = LEVELS[levelIndex];
+
+      // --- MISSION LOGIC UPDATE ---
+      if (!isEndingSequenceRef.current && !isCrashSequenceRef.current) {
+          const mType = level.missionType;
+          if (mType === 'MAINTAIN_SPEED') {
+              if (player.speedTimer > 0) {
+                  missionProgressRef.current = Math.min(level.missionTarget, missionProgressRef.current + dt);
+              }
+          } else if (mType === 'LOW_ALTITUDE') {
+              if (player.y > CANVAS_HEIGHT / 2) {
+                  missionProgressRef.current = Math.min(level.missionTarget, missionProgressRef.current + dt);
+              }
+          } else if (mType === 'COLLECT_WISHES') {
+              // Handled in letter collision
+          } else if (mType === 'DESTROY_OBSTACLES') {
+              // Handled in projectile collision
+          }
+      }
 
       if (!isEndingSequenceRef.current && !isCrashSequenceRef.current) {
           // Apply drain unless infinite
@@ -744,6 +767,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       if (levelIndex !== lastLevelIndexRef.current) {
           soundManager.playLevelBgm(levelIndex);
           lastLevelIndexRef.current = levelIndex;
+          // Reset mission progress on level change
+          missionProgressRef.current = 0; 
       }
 
       if (level.name.includes("Dark")) {
@@ -754,14 +779,27 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           saturationRef.current = Math.min(1.0, saturationRef.current + 0.01);
       }
 
+      // --- TRAIL UPDATE ---
+      if (!isCrashSequenceRef.current && currentSpeed > 5) {
+          // Add point
+          player.trail.push({x: player.x + 10, y: player.y + 20, alpha: 1.0});
+          // Update fading
+          player.trail.forEach(t => {
+              t.x -= currentSpeed * 0.8 * timeScale;
+              t.alpha -= 0.05 * timeScale;
+          });
+          player.trail = player.trail.filter(t => t.alpha > 0);
+      } else if (isCrashSequenceRef.current) {
+          // Trail logic specific to crash already handled in particle spawns, clear standard trail
+          player.trail = [];
+      } else {
+          player.trail = [];
+      }
+
       trailTimerRef.current += dt;
-      if (trailTimerRef.current > 0.1) {
+      if (trailTimerRef.current > 0.1 && !isCrashSequenceRef.current) {
           trailTimerRef.current = 0;
-          if (isCrashSequenceRef.current) {
-             createParticles(player.x, player.y + 20, ParticleType.TRAIL, 1, 'rgba(50,50,50,0.5)');
-          } else {
-             createParticles(player.x, player.y + 20, ParticleType.TRAIL, 1, 'rgba(255,255,255,0.3)');
-          }
+          createParticles(player.x, player.y + 20, ParticleType.TRAIL, 1, 'rgba(255,255,255,0.3)');
       }
 
       if (gameMode === GameMode.STORY) {
@@ -924,6 +962,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               createParticles(letter.x, letter.y, ParticleType.GLOW, 5, 'gold');
               routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 5);
               wishesCollectedCountRef.current += 1;
+              
+              if (level.missionType === 'COLLECT_WISHES') {
+                  missionProgressRef.current = Math.min(level.missionTarget, missionProgressRef.current + 1);
+              }
+
               activeWishRef.current = { message: letter.message, variant: letter.variant };
               setTimeout(() => { if (activeWishRef.current?.message === letter.message) activeWishRef.current = null; }, 4000);
           }
@@ -943,6 +986,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
             createParticles(obs.x + obs.width/2, obs.y + obs.height/2, ParticleType.DEBRIS, 10, '#fff');
             scoreRef.current += 50;
             routeStabilityRef.current = Math.min(100, routeStabilityRef.current + 5); 
+            
+            if (level.missionType === 'DESTROY_OBSTACLES') {
+                missionProgressRef.current = Math.min(level.missionTarget, missionProgressRef.current + 1);
+            }
           }
         });
       });
@@ -972,7 +1019,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           activeWish: activeWishRef.current,
           wishesCollected: wishesCollectedCountRef.current,
           stamina: player.stamina,
-          stability: routeStabilityRef.current
+          stability: routeStabilityRef.current,
+          missionProgress: missionProgressRef.current
         });
       }
     };
@@ -1056,6 +1104,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               obstaclesRef.current.forEach(obs => drawObstacle(ctx, obs, timestamp));
           }
           
+          drawTrail(ctx, playerRef.current);
           drawPlayer(ctx, playerRef.current, timestamp);
           
           // Draw electrical static if in crash sequence phase 3
@@ -1095,7 +1144,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           drawBlizzard(ctx, timestamp, currentIntensity, logicalWidth);
       }
       if (level.weatherType === 'WIND_CORRIDOR') {
-          drawWindLines(ctx, timestamp, logicalWidth);
+          drawWindLines(ctx, timestamp, currentIntensity, logicalWidth);
       }
 
       // --- Lighting Overlay ---
@@ -1154,7 +1203,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
   // --- Helper Logic ---
   const checkCollision = (rect1: Entity, rect2: Entity) => {
-    const padding = 15; 
+    const padding = 25; // INCREASED PADDING FOR FORGIVING HITBOX
     return (
       rect1.x + padding < rect2.x + rect2.width - padding &&
       rect1.x + rect1.width - padding > rect2.x + padding &&
@@ -1226,6 +1275,29 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   };
 
   // --- DRAWING FUNCTIONS ---
+
+  const drawTrail = (ctx: CanvasRenderingContext2D, player: Player) => {
+      if (player.trail.length < 2) return;
+      ctx.save();
+      ctx.beginPath();
+      // Draw smooth curve through trail points
+      ctx.moveTo(player.trail[0].x, player.trail[0].y);
+      for (let i = 1; i < player.trail.length; i++) {
+          const point = player.trail[i];
+          ctx.lineTo(point.x, point.y);
+      }
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "rgba(165, 243, 252, 0.4)"; // Cyan glow
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+      
+      // Add a core white line
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.6)"; 
+      ctx.stroke();
+      ctx.restore();
+  };
 
   const drawSpeedLines = (ctx: CanvasRenderingContext2D, width: number) => {
       ctx.save();
@@ -1334,10 +1406,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           multiplier = 5;
       }
       
+      // INTENSITY NOW DIRECTLY AFFECTS DENSITY VISUALLY
       const effectiveIntensity = Math.max(1, intensity * multiplier);
+      const density = Math.min(1.0, 0.2 + (effectiveIntensity / 10)); // Cap density
       
       ctx.fillStyle = "white";
-      snowParticlesRef.current.forEach(p => {
+      snowParticlesRef.current.forEach((p, index) => {
+          // Skip particles based on intensity to vary density
+          if (index % 10 > effectiveIntensity) return;
+
           // Update position
           if (isCrashSequenceRef.current && crashTimerRef.current > 1.0) {
               // Horizontal blizzard in cutscene
@@ -1802,14 +1879,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       ctx.restore();
   };
 
-  const drawWindLines = (ctx: CanvasRenderingContext2D, timestamp: number, width: number) => {
+  const drawWindLines = (ctx: CanvasRenderingContext2D, timestamp: number, intensity: number, width: number) => {
       ctx.save();
-      ctx.strokeStyle = "rgba(200, 200, 255, 0.1)";
+      // Increase opacity and line count based on intensity
+      const baseOpacity = 0.1 + (intensity * 0.05); 
+      ctx.strokeStyle = `rgba(200, 200, 255, ${Math.min(0.8, baseOpacity)})`;
       ctx.lineWidth = 100;
-      const offset = (timestamp * 0.5) % width;
-      ctx.beginPath();
-      ctx.moveTo(width - offset, 0); ctx.lineTo(width - offset - 200, CANVAS_HEIGHT);
-      ctx.stroke();
+      
+      const count = Math.max(1, Math.floor(intensity / 2));
+      
+      for(let i=0; i<count; i++) {
+          const offset = (timestamp * (0.5 + i*0.2)) % width;
+          ctx.beginPath();
+          ctx.moveTo(width - offset, 0); ctx.lineTo(width - offset - 200, CANVAS_HEIGHT);
+          ctx.stroke();
+      }
       ctx.restore();
   };
 
@@ -1838,6 +1922,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
             wishesCollected={hudState.wishesCollected}
             stamina={hudState.stamina}
             stability={hudState.stability}
+            mission={{
+                type: LEVELS[hudState.levelIndex].missionType,
+                progress: hudState.missionProgress,
+                target: LEVELS[hudState.levelIndex].missionTarget,
+                objective: LEVELS[hudState.levelIndex].missionObjective
+            }}
           />
           
           <button 

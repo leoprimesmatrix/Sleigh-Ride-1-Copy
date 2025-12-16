@@ -34,21 +34,25 @@ export const LEVELS: LevelConfig[] = [
   {
     name: "The Buried Road",
     description: "Snowstorms have covered the supply route.",
-    missionObjective: "Blast obstacles to clear the path.",
+    missionObjective: "Destroy 5 Ice Obstacles.",
+    missionType: 'DESTROY_OBSTACLES',
+    missionTarget: 5,
     backgroundGradient: ['#1e293b', '#334155'], // Slate Sky
     groundPalette: ['#475569', '#64748b', '#94a3b8'], // Icy Greys
     terrainType: 'MOUNTAINS',
     ambientLight: 'rgba(165, 243, 252, 0.1)', 
     obstacleSpeedMultiplier: 1.0,
-    spawnRateMultiplier: 1.0,
-    weatherIntensity: 1,
+    spawnRateMultiplier: 1.5, // Increased spawn for destruction targets
+    weatherIntensity: 2,
     weatherType: 'SNOWSTORM',
     stabilityDrainRate: 0.03
   },
   {
     name: "The Dark Metropolis",
     description: "The power grid has failed. Belief is dropping.",
-    missionObjective: "Collect stabilizers to re-ignite the city.",
+    missionObjective: "Collect 3 Data Packets (Letters).",
+    missionType: 'COLLECT_WISHES',
+    missionTarget: 3,
     backgroundGradient: ['#020617', '#172554'], // Midnight Blue
     groundPalette: ['#0f172a', '#1e293b', '#334155'], // Dark Buildings
     terrainType: 'CITY',
@@ -62,7 +66,9 @@ export const LEVELS: LevelConfig[] = [
   {
     name: "Turbulent Skies",
     description: "Atmospheric instability detected.",
-    missionObjective: "Maintain altitude. Watch Reindeer stamina.",
+    missionObjective: "Fly Low (Below 50% Height) for 15s.",
+    missionType: 'LOW_ALTITUDE',
+    missionTarget: 15,
     backgroundGradient: ['#0f172a', '#475569'], // Stormy
     groundPalette: ['#1e1b4b', '#312e81', '#4338ca'], // Deep Indigos
     terrainType: 'HILLS',
@@ -76,7 +82,9 @@ export const LEVELS: LevelConfig[] = [
   {
     name: "The Glacial Spikes",
     description: "High winds ahead. Route integrity critical.",
-    missionObjective: "Survive the wind corridor.",
+    missionObjective: "Maintain High Speed for 10s.",
+    missionType: 'MAINTAIN_SPEED',
+    missionTarget: 10,
     backgroundGradient: ['#082f49', '#0ea5e9'], // Cyan/Blue
     groundPalette: ['#164e63', '#155e75', '#0891b2'], // Sharp Ice
     terrainType: 'SPIKES',
@@ -90,7 +98,9 @@ export const LEVELS: LevelConfig[] = [
   {
     name: "Eye of the Storm",
     description: "The source of the anomaly.",
-    missionObjective: "Deliver the final spark.",
+    missionObjective: "Survive the final approach.",
+    missionType: 'SURVIVE',
+    missionTarget: 1, // Just finish
     backgroundGradient: ['#450a0a', '#991b1b'], // Red warning sky
     groundPalette: ['#450a0a', '#7f1d1d', '#b91c1c'], // Red Tinted Ground
     terrainType: 'MOUNTAINS',
@@ -104,7 +114,7 @@ export const LEVELS: LevelConfig[] = [
 ];
 
 export const TOTAL_GAME_TIME_SECONDS = 300; 
-export const VICTORY_DISTANCE = 25000; // Adjusted for a short, single level (~1 min)
+export const VICTORY_DISTANCE = 25000; 
 
 export const WISHES = [
   "I hope things go back to normal.",

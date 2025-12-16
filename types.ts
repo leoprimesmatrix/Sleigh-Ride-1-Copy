@@ -45,6 +45,7 @@ export interface Player extends Entity {
   angle: number;
   stamina: number;
   maxStamina: number;
+  trail: {x: number, y: number, alpha: number}[]; // Visual trail
 }
 
 export interface Obstacle extends Entity {
@@ -104,10 +105,14 @@ export interface Particle {
   growth: number;
 }
 
+export type MissionType = 'SURVIVE' | 'DESTROY_OBSTACLES' | 'COLLECT_WISHES' | 'MAINTAIN_SPEED' | 'LOW_ALTITUDE';
+
 export interface LevelConfig {
   name: string;
   description: string;
   missionObjective: string;
+  missionType: MissionType;
+  missionTarget: number; // e.g. 5 obstacles, 10 seconds
   backgroundGradient: [string, string];
   groundPalette: [string, string, string]; // Far, Mid, Near colors
   terrainType: 'MOUNTAINS' | 'CITY' | 'SPIKES' | 'HILLS';
