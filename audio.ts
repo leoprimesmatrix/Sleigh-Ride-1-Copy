@@ -134,6 +134,24 @@ export class SoundManager {
     this.createNoiseBurst(1.5, 100, 1, 0.8);
   }
 
+  playShock() {
+    if (!this.ctx || !this.sfxGain) return;
+    // High pitched zap
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.3);
+    
+    this.createNoiseBurst(0.2, 3000, 0, 0.5);
+  }
+
   playJump() {
     if (!this.ctx || !this.sfxGain) return;
     const osc = this.ctx.createOscillator();

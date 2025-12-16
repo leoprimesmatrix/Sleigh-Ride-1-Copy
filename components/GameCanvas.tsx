@@ -86,7 +86,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const starsRef = useRef<{x:number, y:number, size:number, phase:number}[]>([]);
   const bgCloudsRef = useRef<{x:number, y:number, speed:number, scale:number, opacity: number}[]>([]);
   const flashTimerRef = useRef(0); 
-  const lightningOpacityRef = useRef(0);
   const pausedTimeRef = useRef(0); 
 
   const saturationRef = useRef(0.0);
@@ -95,6 +94,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   
   // Special Scripted Events
   const isCrashSequenceRef = useRef(false);
+  const crashTimerRef = useRef(0);
+  const cutsceneOpacityRef = useRef(0); // For handling the transition fade in/out
   
   const joyRideModeRef = useRef(false);
   const joyRideTimerRef = useRef(0);
@@ -320,12 +321,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       triggeredLettersRef.current.clear();
       endingMusicTriggeredRef.current = false;
       flashTimerRef.current = 0;
-      lightningOpacityRef.current = 0;
       pausedTimeRef.current = 0;
       isExhaustedRef.current = false;
       lastStaminaWarnTimeRef.current = 0;
       lastThunderTimeRef.current = 0;
       isCrashSequenceRef.current = false;
+      crashTimerRef.current = 0;
+      cutsceneOpacityRef.current = 0;
       
       routeStabilityRef.current = INITIAL_STABILITY;
       distanceRef.current = initialDistance;
@@ -460,7 +462,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       }
       
       if (flashTimerRef.current > 0) flashTimerRef.current -= dt;
-      if (lightningOpacityRef.current > 0) lightningOpacityRef.current -= dt * 2; // Fade lightning
       
       const speedMultiplier = player.speedTimer > 0 ? 1.5 : 1.0;
       let progressRatio = distanceRef.current / VICTORY_DISTANCE;
@@ -505,48 +506,86 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
       // --- SCRIPTED EVENTS FOR LEVEL 5 (Index 4) ---
       if (levelIndex === 4 && gameMode === GameMode.STORY) {
-          // 50% Progress: Storm Begins
-          if (progressRatio > 0.5) {
-              if (Math.random() < 0.01 && lightningOpacityRef.current <= 0) {
-                  lightningOpacityRef.current = 0.8 + Math.random() * 0.2;
-                  if (timestamp - lastThunderTimeRef.current > 4000) {
-                      soundManager.playThunder();
-                      lastThunderTimeRef.current = timestamp;
-                  }
-              }
-          }
-
-          // 70% Progress: Crash Sequence triggers
-          if (progressRatio > 0.7 && !isCrashSequenceRef.current) {
+          // 60% Progress: Crash Sequence triggers (Shortened for dramatic effect per request)
+          if (progressRatio > 0.6 && !isCrashSequenceRef.current) {
               isCrashSequenceRef.current = true;
               player.isInvincible = true;
               soundManager.setSleighVolume(0);
-              // Ensure we aren't near ground when starting
-              if (player.y > CANVAS_HEIGHT / 2) player.y = 100; 
+              setCinematicMode(true); // Hide HUD
           }
       }
 
-      // --- CRASH PHYSICS ---
+      // --- CRASH CINEMATIC SEQUENCE ---
       if (isCrashSequenceRef.current) {
-          // Move forward slowly but fall fast
-          distanceRef.current += BASE_SPEED * 0.5 * timeScale;
-          
-          // Force push down
-          player.vy += 0.8 * timeScale; 
-          player.y += player.vy * timeScale;
-          
-          // Rotate nose down
-          const targetAngle = Math.PI / 3; // 60 degrees down
-          player.angle += (targetAngle - player.angle) * 0.05 * timeScale;
+          crashTimerRef.current += dt;
+          const t = crashTimerRef.current;
 
-          // Smoke trailing
-          if (Math.random() < 0.8) {
-              createParticles(player.x + 20, player.y + 10, ParticleType.SMOKE, 2, '#555');
-              createParticles(player.x + 20, player.y + 10, ParticleType.FIRE, 1, '#f59e0b');
+          // Phase 1: Transition (Fade out gameplay audio, fade screen to white/black transition)
+          if (t < 1.0) {
+              cutsceneOpacityRef.current = Math.min(1, t * 2); // Fast fade to white
+              soundManager.stopBgm();
+          } 
+          // Phase 2: The Struggle (Fade in to storm)
+          else if (t < 4.0) {
+              // Fade back in from white to scene
+              cutsceneOpacityRef.current = Math.max(0, 1 - (t - 1.0));
+              
+              // Heavy Shake
+              shakeRef.current = 5 + Math.sin(t * 20) * 2;
+              
+              // Maintain altitude but struggle
+              player.y = CANVAS_HEIGHT / 3 + Math.sin(t * 15) * 20;
+              player.angle = Math.sin(t * 10) * 0.1;
+              
+              // Move background fast
+              distanceRef.current += BASE_SPEED * 1.2 * timeScale;
           }
-
-          // Cut to black before hitting ground
-          if (player.y > CANVAS_HEIGHT - 100) {
+          // Phase 3: The Strike
+          else if (t < 4.5) {
+              // Lightning Strike!
+              if (t < 4.1 && flashTimerRef.current <= 0) {
+                  flashTimerRef.current = 0.5; // Flash screen
+                  soundManager.playThunder();
+                  soundManager.playShock();
+                  shakeRef.current = 40; // Violent shake
+                  createExplosion(player.x + 20, player.y + 10);
+              }
+              // Static shock effect handled in draw
+          }
+          // Phase 4: Suspension (Smoke, Stunned)
+          else if (t < 6.5) {
+              shakeRef.current = Math.max(0, shakeRef.current * 0.9); // Dampen shake
+              
+              // Smoke
+              if (Math.random() < 0.5) {
+                  createParticles(player.x + 20, player.y + 10, ParticleType.SMOKE, 1, '#555');
+              }
+              
+              // Slight drift down
+              player.y += 0.5 * timeScale;
+              player.angle += 0.005 * timeScale;
+              
+              // Slow down background movement
+              distanceRef.current += BASE_SPEED * 0.5 * timeScale;
+          }
+          // Phase 5: The Fall
+          else if (t < 9.0) {
+              // Gravity kicks in hard
+              player.vy += 1.5 * timeScale; 
+              player.y += player.vy * timeScale;
+              
+              // Nose dive
+              const targetAngle = Math.PI / 2.5; 
+              player.angle += (targetAngle - player.angle) * 0.1 * timeScale;
+              
+              // Heavy smoke/fire
+              createParticles(player.x + 20, player.y + 10, ParticleType.SMOKE, 3, '#333');
+              createParticles(player.x + 20, player.y + 10, ParticleType.FIRE, 2, '#f59e0b');
+              
+              distanceRef.current += BASE_SPEED * 0.2 * timeScale;
+          }
+          // Phase 6: Cut to Black
+          else {
               setGameState(GameState.CLIFFHANGER);
               return;
           }
@@ -965,21 +1004,29 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           drawMountainLayer(ctx, bgLayersRef.current[2], CANVAS_HEIGHT, level.groundPalette[2], timestamp, level.terrainType, true, logicalWidth);
       }
 
-      if (!cinematicMode) {
-          landmarksRef.current.forEach(lm => drawLandmark(ctx, lm, timestamp));
-          powerupsRef.current.forEach(pup => drawPowerup(ctx, pup, timestamp));
-          lettersRef.current.forEach(letter => drawLetter(ctx, letter));
-          
-          obstaclesRef.current.forEach(obs => drawObstacle(ctx, obs, timestamp));
+      if (!cinematicMode || isCrashSequenceRef.current) {
+          if (!cinematicMode) {
+              landmarksRef.current.forEach(lm => drawLandmark(ctx, lm, timestamp));
+              powerupsRef.current.forEach(pup => drawPowerup(ctx, pup, timestamp));
+              lettersRef.current.forEach(letter => drawLetter(ctx, letter));
+              obstaclesRef.current.forEach(obs => drawObstacle(ctx, obs, timestamp));
+          }
           
           drawPlayer(ctx, playerRef.current, timestamp);
           
-          ctx.fillStyle = "#e0f2fe"; ctx.shadowBlur = 10; ctx.shadowColor = "#bae6fd";
-          projectilesRef.current.forEach(p => {
-            ctx.beginPath(); ctx.arc(p.x, p.y, p.width/2, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(p.x, p.y, p.width, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fill();
-          });
-          ctx.shadowBlur = 0;
+          // Draw electrical static if in crash sequence phase 3
+          if (isCrashSequenceRef.current && crashTimerRef.current > 4.0 && crashTimerRef.current < 4.5) {
+              drawStaticEffect(ctx, playerRef.current);
+          }
+          
+          if (!cinematicMode) {
+              ctx.fillStyle = "#e0f2fe"; ctx.shadowBlur = 10; ctx.shadowColor = "#bae6fd";
+              projectilesRef.current.forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.width/2, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.width, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,0.3)"; ctx.fill();
+              });
+              ctx.shadowBlur = 0;
+          }
       }
 
       particlesRef.current.forEach(p => {
@@ -1034,10 +1081,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
          ctx.fillRect(0, 0, logicalWidth, CANVAS_HEIGHT);
       }
       
-      // Draw Lightning Flash (Final Level)
-      if (lightningOpacityRef.current > 0) {
-          ctx.fillStyle = `rgba(255, 255, 255, ${lightningOpacityRef.current})`;
+      // --- Cutscene Transition Overlay ---
+      if (isCrashSequenceRef.current) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${cutsceneOpacityRef.current})`;
           ctx.fillRect(0, 0, logicalWidth, CANVAS_HEIGHT);
+          
+          // Cinematic Bars (only if we can see the scene)
+          if (crashTimerRef.current > 1.0) {
+              ctx.fillStyle = "black";
+              const barHeight = 60;
+              ctx.fillRect(0, 0, logicalWidth, barHeight);
+              ctx.fillRect(0, CANVAS_HEIGHT - barHeight, logicalWidth, barHeight);
+          }
       }
       
       ctx.restore();
@@ -1123,6 +1178,29 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
   // --- DRAWING FUNCTIONS ---
 
+  const drawStaticEffect = (ctx: CanvasRenderingContext2D, player: Player) => {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.strokeStyle = "#a5f3fc"; // Cyan electric color
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "white";
+      ctx.shadowBlur = 10;
+      
+      // Draw random jagged lines
+      for (let i = 0; i < 5; i++) {
+          ctx.beginPath();
+          let startX = Math.random() * player.width;
+          let startY = Math.random() * player.height;
+          ctx.moveTo(startX, startY);
+          
+          for (let j = 0; j < 4; j++) {
+              ctx.lineTo(startX + (Math.random() - 0.5) * 30, startY + (Math.random() - 0.5) * 30);
+          }
+          ctx.stroke();
+      }
+      ctx.restore();
+  };
+
   const drawMoon = (ctx: CanvasRenderingContext2D, width: number) => {
      ctx.save();
      ctx.fillStyle = "#fefce8";
@@ -1182,16 +1260,28 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   
   const drawSnowParticles = (ctx: CanvasRenderingContext2D, width: number, weatherType: string, intensity: number) => {
       // Only draw if necessary
-      if (weatherType === 'CLEAR') return;
+      if (weatherType === 'CLEAR' && !isCrashSequenceRef.current) return;
       
-      const multiplier = weatherType === 'SNOWSTORM' ? 2 : (weatherType === 'TURBULENCE' ? 1.5 : 1);
+      let multiplier = weatherType === 'SNOWSTORM' ? 2 : (weatherType === 'TURBULENCE' ? 1.5 : 1);
+      
+      // Override for crash scene
+      if (isCrashSequenceRef.current && crashTimerRef.current > 1.0) {
+          multiplier = 5;
+      }
+      
       const effectiveIntensity = Math.max(1, intensity * multiplier);
       
       ctx.fillStyle = "white";
       snowParticlesRef.current.forEach(p => {
           // Update position
-          p.x += p.vx * effectiveIntensity;
-          p.y += p.vy * effectiveIntensity;
+          if (isCrashSequenceRef.current && crashTimerRef.current > 1.0) {
+              // Horizontal blizzard in cutscene
+              p.x -= 20; 
+              p.y += p.vy;
+          } else {
+              p.x += p.vx * effectiveIntensity;
+              p.y += p.vy * effectiveIntensity;
+          }
           
           if (p.y > CANVAS_HEIGHT) {
               p.y = -10;
@@ -1201,6 +1291,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               p.x = 0;
           } else if (p.x < 0) {
               p.x = width;
+              p.y = Math.random() * CANVAS_HEIGHT;
           }
           
           // Draw
@@ -1324,7 +1415,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   };
 
   const drawPlayer = (ctx: CanvasRenderingContext2D, player: Player, timestamp: number) => {
-    if (player.isInvincible && Math.floor(Date.now() / 50) % 2 === 0) return;
+    if (player.isInvincible && Math.floor(Date.now() / 50) % 2 === 0 && !isCrashSequenceRef.current) return;
     ctx.save(); 
     ctx.translate(player.x + player.width/2, player.y + player.height/2); 
     ctx.rotate(player.angle);
