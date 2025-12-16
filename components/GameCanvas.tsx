@@ -1146,7 +1146,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       // Draw Layers based on Terrain Type (Hide ground during crash sequence high altitude phase)
       // Only draw mountains if not in deep descent or shift them down
       let groundOffset = 0;
-      if (isCrashSequenceRef.current && crashTimerRef.current > 4.0 && crashTimerRef.current < 11.0) {
+      if (isCrashSequenceRef.current && crashTimerRef.current > 4.0) { // Fix: keep ground offset until end of sequence
           groundOffset = 400; // Push ground down to simulate height
       }
 

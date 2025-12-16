@@ -568,9 +568,13 @@ const App: React.FC = () => {
                       From this moment, <br/><span className="text-red-500 font-bold">everything</span> will change.
                   </p>
                   
+                  <p className="text-2xl md:text-4xl font-christmas text-white tracking-widest text-center mt-12 opacity-0 animate-[fade-in-up_4s_ease-out_12s_forwards]">
+                      Christmas <span className="text-red-600 font-bold">2027</span>.
+                  </p>
+                  
                   <button 
                     onClick={restartGame}
-                    className="mt-16 px-8 py-3 border border-white/20 text-white/50 hover:text-white hover:border-white transition-all text-sm uppercase tracking-[0.3em] opacity-0 animate-[fade-in_2s_ease-out_10s_forwards]"
+                    className="mt-16 px-8 py-3 border border-white/20 text-white/50 hover:text-white hover:border-white transition-all text-sm uppercase tracking-[0.3em] opacity-0 animate-[fade-in_2s_ease-out_16s_forwards]"
                   >
                       Return to Menu
                   </button>
