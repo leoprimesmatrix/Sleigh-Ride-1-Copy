@@ -40,7 +40,7 @@ import {
 } from '../constants.ts';
 import UIOverlay from './UIOverlay.tsx';
 import { soundManager } from '../audio.ts';
-import { Bug, Eye, BatteryWarning, ChevronsRight, Heart, Snowflake } from 'lucide-react';
+import { Bug, Eye, BatteryWarning, ChevronsRight, Heart, Snowflake, Activity } from 'lucide-react';
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -81,6 +81,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   
   // Game System Refs
   const routeStabilityRef = useRef(INITIAL_STABILITY);
+  const infiniteStabilityRef = useRef(false); // Debug Ref
   
   const starsRef = useRef<{x:number, y:number, size:number, phase:number}[]>([]);
   const bgCloudsRef = useRef<{x:number, y:number, speed:number, scale:number, opacity: number}[]>([]);
@@ -339,6 +340,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       masterGiftDroppedRef.current = false;
       wasOnGroundRef.current = false;
       lastLevelIndexRef.current = -1;
+      infiniteStabilityRef.current = false;
       
       const currentLogicalWidth = logicalWidthRef.current;
       
@@ -433,6 +435,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const timeScale = dt * 60;
       const logicalWidth = logicalWidthRef.current;
 
+      // --- DEBUG: Infinite Stability ---
+      if (infiniteStabilityRef.current) {
+          routeStabilityRef.current = INITIAL_STABILITY;
+      }
+
       if (gameState === GameState.INTRO) {
           timeRef.current = TOTAL_GAME_TIME_SECONDS; 
           const hoverSpeed = BASE_SPEED * 0.5;
@@ -489,7 +496,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       const level = LEVELS[levelIndex];
 
       if (!isEndingSequenceRef.current && !isCrashSequenceRef.current) {
-          routeStabilityRef.current -= level.stabilityDrainRate * timeScale;
+          // Apply drain unless infinite
+          if (!infiniteStabilityRef.current) {
+              routeStabilityRef.current -= level.stabilityDrainRate * timeScale;
+          }
           if (routeStabilityRef.current <= 0) routeStabilityRef.current = 0;
       }
 
@@ -1688,6 +1698,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
                 </button>
                 <button onClick={() => { playerRef.current.stamina = 9999; playerRef.current.maxStamina = 9999; isExhaustedRef.current = false; }} className="w-full text-left px-3 py-2 hover:bg-green-500/10 rounded border border-transparent hover:border-green-500/30 transition-all flex items-center gap-2">
                     <BatteryWarning size={12} /> Infinite Stamina
+                </button>
+                <button onClick={() => { infiniteStabilityRef.current = !infiniteStabilityRef.current; }} className={`w-full text-left px-3 py-2 rounded border border-transparent transition-all flex items-center gap-2 ${infiniteStabilityRef.current ? 'bg-green-500/20 border-green-500/50' : 'hover:bg-green-500/10 hover:border-green-500/30'}`}>
+                    <Activity size={12} /> Infinite Stability
                 </button>
                 <button onClick={() => { distanceRef.current += 50000; }} className="w-full text-left px-3 py-2 hover:bg-green-500/10 rounded border border-transparent hover:border-green-500/30 transition-all flex items-center gap-2">
                     <ChevronsRight size={12} /> Skip Distance (+50k)
