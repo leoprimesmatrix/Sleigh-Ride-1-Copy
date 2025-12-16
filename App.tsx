@@ -448,7 +448,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {(gameState === GameState.PLAYING || gameState === GameState.GAME_OVER || gameState === GameState.VICTORY || gameState === GameState.BAD_ENDING || gameState === GameState.INTRO || gameState === GameState.LEVEL_COMPLETE) && (
+      {(gameState === GameState.PLAYING || gameState === GameState.GAME_OVER || gameState === GameState.VICTORY || gameState === GameState.BAD_ENDING || gameState === GameState.INTRO || gameState === GameState.LEVEL_COMPLETE || gameState === GameState.CLIFFHANGER) && (
         <div className="fixed inset-0 z-0">
           <GameCanvas 
             gameState={gameState} 
@@ -501,6 +501,21 @@ const App: React.FC = () => {
                          Skip Intro
                       </button>
                   </div>
+              </div>
+          )}
+
+          {gameState === GameState.CLIFFHANGER && (
+              <div className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center animate-fade-in duration-[3000ms]">
+                  <p className="text-3xl md:text-5xl font-christmas text-white tracking-widest text-center leading-loose opacity-0 animate-[fade-in-up_4s_ease-out_3s_forwards] px-8">
+                      "From this moment on,<br/>everything will change."
+                  </p>
+                  
+                  <button 
+                    onClick={restartGame}
+                    className="mt-16 px-8 py-3 border border-white/20 text-white/50 hover:text-white hover:border-white transition-all text-sm uppercase tracking-[0.3em] opacity-0 animate-[fade-in_2s_ease-out_8s_forwards]"
+                  >
+                      Return to Menu
+                  </button>
               </div>
           )}
 

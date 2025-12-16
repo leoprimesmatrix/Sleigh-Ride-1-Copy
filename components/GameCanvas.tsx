@@ -85,11 +85,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   const starsRef = useRef<{x:number, y:number, size:number, phase:number}[]>([]);
   const bgCloudsRef = useRef<{x:number, y:number, speed:number, scale:number, opacity: number}[]>([]);
   const flashTimerRef = useRef(0); 
+  const lightningOpacityRef = useRef(0);
   const pausedTimeRef = useRef(0); 
 
   const saturationRef = useRef(0.0);
   const isLightsOutRef = useRef(false);
   const isEndingSequenceRef = useRef(false);
+  
+  // Special Scripted Events
+  const isCrashSequenceRef = useRef(false);
+  
   const joyRideModeRef = useRef(false);
   const joyRideTimerRef = useRef(0);
   const masterGiftDroppedRef = useRef(false);
@@ -98,6 +103,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   
   // Track last warning sound time
   const lastStaminaWarnTimeRef = useRef(0);
+  const lastThunderTimeRef = useRef(0);
 
   const collectedPowerupsRef = useRef<{ id: number; type: PowerupType }[]>([]);
   const wishesCollectedCountRef = useRef(0);
@@ -193,6 +199,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   });
 
   const handleJump = () => {
+      if (isCrashSequenceRef.current) return; // Disable controls during crash
+      
       const player = playerRef.current;
       if (isExhaustedRef.current) {
           player.vy = JUMP_STRENGTH * LOW_STAMINA_PENALTY;
@@ -213,6 +221,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
   };
 
   const shootSnowball = () => {
+    if (isCrashSequenceRef.current) return;
+
     if (playerRef.current.snowballs > 0) {
       playerRef.current.snowballs--;
       soundManager.playShoot();
@@ -309,9 +319,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       triggeredLettersRef.current.clear();
       endingMusicTriggeredRef.current = false;
       flashTimerRef.current = 0;
+      lightningOpacityRef.current = 0;
       pausedTimeRef.current = 0;
       isExhaustedRef.current = false;
       lastStaminaWarnTimeRef.current = 0;
+      lastThunderTimeRef.current = 0;
+      isCrashSequenceRef.current = false;
       
       routeStabilityRef.current = INITIAL_STABILITY;
       distanceRef.current = initialDistance;
@@ -408,7 +421,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
               animationFrameId = requestAnimationFrame(render);
           }
       } else {
-          setGameState(GameState.GAME_OVER);
+          // If we are in a crash sequence, don't trigger normal game over yet, wait for scripted event
+          if (!isCrashSequenceRef.current) {
+              setGameState(GameState.GAME_OVER);
+          }
       }
     };
 
@@ -430,13 +446,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           return;
       }
 
-      if (gameMode === GameMode.STORY && !joyRideModeRef.current) {
+      if (gameMode === GameMode.STORY && !joyRideModeRef.current && !isCrashSequenceRef.current) {
          timeRef.current -= dt;
       } else {
          if (!joyRideModeRef.current) timeRef.current = 999;
       }
       
       if (flashTimerRef.current > 0) flashTimerRef.current -= dt;
+      if (lightningOpacityRef.current > 0) lightningOpacityRef.current -= dt * 2; // Fade lightning
       
       const speedMultiplier = player.speedTimer > 0 ? 1.5 : 1.0;
       let progressRatio = distanceRef.current / VICTORY_DISTANCE;
@@ -471,44 +488,95 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
 
       const level = LEVELS[levelIndex];
 
-      if (!isEndingSequenceRef.current) {
+      if (!isEndingSequenceRef.current && !isCrashSequenceRef.current) {
           routeStabilityRef.current -= level.stabilityDrainRate * timeScale;
           if (routeStabilityRef.current <= 0) routeStabilityRef.current = 0;
       }
 
-      // Physics
-      const isOnGround = player.y >= CANVAS_HEIGHT - 55 - player.height;
-      if (isOnGround) {
-          if (!wasOnGroundRef.current) {
-               createParticles(player.x + 20, player.y + player.height, ParticleType.DUST, 15, '#cbd5e1');
+      // --- SCRIPTED EVENTS FOR LEVEL 5 (Index 4) ---
+      if (levelIndex === 4 && gameMode === GameMode.STORY) {
+          // 50% Progress: Storm Begins
+          if (progressRatio > 0.5) {
+              if (Math.random() < 0.01 && lightningOpacityRef.current <= 0) {
+                  lightningOpacityRef.current = 0.8 + Math.random() * 0.2;
+                  if (timestamp - lastThunderTimeRef.current > 4000) {
+                      soundManager.playThunder();
+                      lastThunderTimeRef.current = timestamp;
+                  }
+              }
           }
-          wasOnGroundRef.current = true;
-          player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN_GROUND * timeScale); 
-      } else {
-          wasOnGroundRef.current = false;
-          if (player.vy > 0) {
-               player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN_AIR * timeScale);
+
+          // 70% Progress: Crash Sequence triggers
+          if (progressRatio > 0.7 && !isCrashSequenceRef.current) {
+              isCrashSequenceRef.current = true;
+              player.isInvincible = true;
+              soundManager.setSleighVolume(0);
+              // Ensure we aren't near ground when starting
+              if (player.y > CANVAS_HEIGHT / 2) player.y = 100; 
           }
       }
-      if (isExhaustedRef.current) {
-          if (player.stamina >= STAMINA_RECOVERY_THRESHOLD) {
-              isExhaustedRef.current = false;
-          }
-      }
-      
-      // LOW STAMINA WARNING SOUND
-      if (player.stamina < MAX_STAMINA * 0.25 || isExhaustedRef.current) {
-          const urgency = 1 - (player.stamina / (MAX_STAMINA * 0.25));
-          const interval = Math.max(200, 1000 - (urgency * 800)); // 1000ms down to 200ms
+
+      // --- CRASH PHYSICS ---
+      if (isCrashSequenceRef.current) {
+          // Move forward slowly but fall fast
+          distanceRef.current += BASE_SPEED * 0.5 * timeScale;
           
-          if (timestamp - lastStaminaWarnTimeRef.current > interval) {
-              soundManager.playTimeWarning();
-              lastStaminaWarnTimeRef.current = timestamp;
+          // Force push down
+          player.vy += 0.8 * timeScale; 
+          player.y += player.vy * timeScale;
+          
+          // Rotate nose down
+          const targetAngle = Math.PI / 3; // 60 degrees down
+          player.angle += (targetAngle - player.angle) * 0.05 * timeScale;
+
+          // Smoke trailing
+          if (Math.random() < 0.8) {
+              createParticles(player.x + 20, player.y + 10, ParticleType.SMOKE, 2, '#555');
+              createParticles(player.x + 20, player.y + 10, ParticleType.FIRE, 1, '#f59e0b');
+          }
+
+          // Cut to black before hitting ground
+          if (player.y > CANVAS_HEIGHT - 100) {
+              setGameState(GameState.CLIFFHANGER);
+              return;
+          }
+      }
+
+      // Normal Physics (Only if not crashing)
+      if (!isCrashSequenceRef.current) {
+          const isOnGround = player.y >= CANVAS_HEIGHT - 55 - player.height;
+          if (isOnGround) {
+              if (!wasOnGroundRef.current) {
+                   createParticles(player.x + 20, player.y + player.height, ParticleType.DUST, 15, '#cbd5e1');
+              }
+              wasOnGroundRef.current = true;
+              player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN_GROUND * timeScale); 
+          } else {
+              wasOnGroundRef.current = false;
+              if (player.vy > 0) {
+                   player.stamina = Math.min(MAX_STAMINA, player.stamina + STAMINA_REGEN_AIR * timeScale);
+              }
+          }
+          if (isExhaustedRef.current) {
+              if (player.stamina >= STAMINA_RECOVERY_THRESHOLD) {
+                  isExhaustedRef.current = false;
+              }
+          }
+          
+          // LOW STAMINA WARNING SOUND
+          if (player.stamina < MAX_STAMINA * 0.25 || isExhaustedRef.current) {
+              const urgency = 1 - (player.stamina / (MAX_STAMINA * 0.25));
+              const interval = Math.max(200, 1000 - (urgency * 800)); // 1000ms down to 200ms
+              
+              if (timestamp - lastStaminaWarnTimeRef.current > interval) {
+                  soundManager.playTimeWarning();
+                  lastStaminaWarnTimeRef.current = timestamp;
+              }
           }
       }
 
       const currentSpeedFrame = (BASE_SPEED + (Math.min(progressRatio, 3.0) * 6)); 
-      let currentSpeed = isEndingSequenceRef.current ? currentSpeedFrame * 0.5 : currentSpeedFrame * speedMultiplier; 
+      let currentSpeed = isEndingSequenceRef.current || isCrashSequenceRef.current ? currentSpeedFrame * 0.5 : currentSpeedFrame * speedMultiplier; 
       
       if (!isEndingSequenceRef.current) {
         starsRef.current.forEach(star => {
@@ -532,16 +600,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
            weatherY = (Math.sin(timestamp / 150) * 0.8 * weatherProgressMultiplier);
       }
       
-      // Ending / Level Complete Trigger
-      if (gameMode === GameMode.STORY && progressRatio >= 0.90 && !endingMusicTriggeredRef.current) {
-          if (wishesCollectedCountRef.current >= 0) { 
-             endingMusicTriggeredRef.current = true;
-             soundManager.playEndingMusic(0, 5);
+      // Ending / Level Complete Trigger (Normal Logic, disabled if crash sequence active)
+      if (!isCrashSequenceRef.current) {
+          if (gameMode === GameMode.STORY && progressRatio >= 0.90 && !endingMusicTriggeredRef.current) {
+              if (wishesCollectedCountRef.current >= 0) { 
+                 endingMusicTriggeredRef.current = true;
+                 soundManager.playEndingMusic(0, 5);
+              }
           }
-      }
-      if (gameMode === GameMode.STORY && progressRatio >= 0.99 && !isEndingSequenceRef.current) {
-          isEndingSequenceRef.current = true;
-          player.isInvincible = true;
+          if (gameMode === GameMode.STORY && progressRatio >= 0.99 && !isEndingSequenceRef.current) {
+              isEndingSequenceRef.current = true;
+              player.isInvincible = true;
+          }
       }
 
       if (isEndingSequenceRef.current) {
@@ -588,7 +658,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
                    }
               }
           }
-      } else {
+      } else if (!isCrashSequenceRef.current) {
            soundManager.setSleighVolume(currentSpeed);
       }
 
@@ -613,7 +683,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       trailTimerRef.current += dt;
       if (trailTimerRef.current > 0.1) {
           trailTimerRef.current = 0;
-          createParticles(player.x, player.y + 20, ParticleType.TRAIL, 1, 'rgba(255,255,255,0.3)');
+          if (isCrashSequenceRef.current) {
+             createParticles(player.x, player.y + 20, ParticleType.TRAIL, 1, 'rgba(50,50,50,0.5)');
+          } else {
+             createParticles(player.x, player.y + 20, ParticleType.TRAIL, 1, 'rgba(255,255,255,0.3)');
+          }
       }
 
       if (gameMode === GameMode.STORY) {
@@ -647,7 +721,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           });
       }
 
-      if (!isEndingSequenceRef.current) {
+      if (!isEndingSequenceRef.current && !isCrashSequenceRef.current) {
           player.vy += (GRAVITY + weatherY) * timeScale;
           player.y += player.vy * timeScale;
           const targetAngle = Math.min(Math.max(player.vy * 0.05, -0.6), 0.6);
@@ -729,7 +803,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         obs.x -= currentSpeed * level.obstacleSpeedMultiplier * timeScale;
         if (obs.x + obs.width < -100) obs.markedForDeletion = true;
         
-        if (!cinematicMode && !player.isInvincible && checkCollision(player, obs)) {
+        if (!cinematicMode && !player.isInvincible && !isCrashSequenceRef.current && checkCollision(player, obs)) {
            if (gameMode === GameMode.STORY && levelIndex === 4) {
            } else {
                player.lives--;
@@ -748,7 +822,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         pup.floatOffset += 0.05 * timeScale;
         pup.y += Math.sin(pup.floatOffset) * 0.5 * timeScale;
         if (pup.x + pup.width < -50) pup.markedForDeletion = true;
-        if (!cinematicMode && checkCollision(player, pup)) {
+        if (!cinematicMode && !isCrashSequenceRef.current && checkCollision(player, pup)) {
           pup.markedForDeletion = true;
           applyPowerup(pup.type);
           soundManager.playPowerup(pup.type);
@@ -763,7 +837,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
           letter.floatOffset += 0.03 * timeScale;
           letter.y += Math.sin(letter.floatOffset) * 1 * timeScale;
           if (letter.x + letter.width < -50) letter.markedForDeletion = true;
-          if (!cinematicMode && checkCollision(player, letter)) {
+          if (!cinematicMode && !isCrashSequenceRef.current && checkCollision(player, letter)) {
               letter.markedForDeletion = true;
               soundManager.playCollectWish();
               createParticles(letter.x, letter.y, ParticleType.SPARKLE, 15, '#fbbf24');
@@ -948,6 +1022,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
       if (flashTimerRef.current > 0) {
          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, flashTimerRef.current)})`;
          ctx.fillRect(0, 0, logicalWidth, CANVAS_HEIGHT);
+      }
+      
+      // Draw Lightning Flash (Final Level)
+      if (lightningOpacityRef.current > 0) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${lightningOpacityRef.current})`;
+          ctx.fillRect(0, 0, logicalWidth, CANVAS_HEIGHT);
       }
       
       ctx.restore();
@@ -1567,7 +1647,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, onWin,
         style={{ width: dimensions.w, height: dimensions.h }}
         className="w-full h-full block" 
       />
-      {gameState !== GameState.INTRO && !cinematicMode && !isEndingSequenceRef.current && (
+      {gameState !== GameState.INTRO && !cinematicMode && !isEndingSequenceRef.current && !isCrashSequenceRef.current && (
         <>
           <UIOverlay 
             lives={hudState.lives}

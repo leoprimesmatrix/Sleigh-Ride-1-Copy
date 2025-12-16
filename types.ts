@@ -8,7 +8,8 @@ export enum GameState {
   VICTORY,
   BAD_ENDING,
   LEVEL_TRANSITION, // Earth zoom effect
-  LEVEL_COMPLETE // New state for intermediate levels
+  LEVEL_COMPLETE, // New state for intermediate levels
+  CLIFFHANGER // New state for the scripted crash event
 }
 
 export enum GameMode {

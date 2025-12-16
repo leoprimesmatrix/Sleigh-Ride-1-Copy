@@ -1,5 +1,4 @@
 
-
 export class SoundManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -73,6 +72,7 @@ export class SoundManager {
       else if (levelIndex === 1) trackKey = 'gray_world';
       else if (levelIndex === 2) trackKey = 'ocean_of_silence';
       else if (levelIndex === 3) trackKey = 'great_blizzard';
+      else if (levelIndex === 4) trackKey = 'great_blizzard'; // Use blizzard track for final too
       
       this.transitionBgm(trackKey);
   }
@@ -105,11 +105,6 @@ export class SoundManager {
   }
 
   private fadeVolume(audio: HTMLAudioElement, target: number, duration: number, onComplete?: () => void) {
-      // Clear any existing fade interval on this specific audio element if we were tracking it map-wise, 
-      // but for simplicity we rely on the rapid updates. 
-      // A more robust system would track intervals per audio element.
-      // Since we only really fade one BGM out and one in, it's usually fine.
-      
       const stepTime = 50;
       const steps = duration / stepTime;
       const diff = target - audio.volume;
@@ -119,7 +114,6 @@ export class SoundManager {
           let newVol = audio.volume + stepVol;
           newVol = Math.max(0, Math.min(1, newVol));
           
-          // Safety check if audio is paused/ended externally
           if (audio.paused && target > 0) {
              clearInterval(interval);
              return;
@@ -133,6 +127,11 @@ export class SoundManager {
               if (onComplete) onComplete();
           }
       }, stepTime);
+  }
+
+  playThunder() {
+    if (!this.ctx || !this.sfxGain) return;
+    this.createNoiseBurst(1.5, 100, 1, 0.8);
   }
 
   playJump() {
@@ -252,16 +251,13 @@ export class SoundManager {
         return;
     }
     
-    // Stop any existing BGM
     this.stopBgm();
     
-    // Ensure any previous ending music fade interval is cleared
     if (this.musicFadeInterval) {
         clearInterval(this.musicFadeInterval);
         this.musicFadeInterval = null;
     }
     
-    // Reset volume and time
     this.endingAudio.pause();
     this.endingAudio.currentTime = startOffsetSeconds;
     this.endingAudio.volume = 0;
@@ -271,7 +267,7 @@ export class SoundManager {
     if (playPromise !== undefined) {
       playPromise.then(() => {
           let vol = 0;
-          const intervalStep = 50; // ms
+          const intervalStep = 50; 
           const totalSteps = (fadeDurationSeconds * 1000) / intervalStep;
           const volStep = 1.0 / totalSteps;
 
